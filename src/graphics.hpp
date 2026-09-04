@@ -22,8 +22,8 @@ class Camera {
 public:
 	int* bitmap = nullptr; // make a copy of allocated bitmap/zbuffer pointers for deleting during destructor
 	int* zbuffer = nullptr;
-	uint width = 1920u; // screen width
-	uint height = 1080u; // screen height
+	uint width = 1920u / 3u; // screen width
+	uint height = 1080u / 2u; // screen height
 	uint fps_limit = 60u; // default value for screen frames per second limit
 	float fov = 100.0f; // field of view, default: 100
 	float zoom=0.5f*(float)min(width, height), dis=0.5f*(float)width/tan(fov*pif/360.0f); // zoom, distance from camera to rotation center

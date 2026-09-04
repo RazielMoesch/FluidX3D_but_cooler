@@ -32,9 +32,11 @@ bool convert(int& rx, int& ry, float& rz, const float3& p, const int stereo) { /
 	rz = r.z;
 	return true;
 }
+
 bool is_off_screen(const int x, const int y) { // check if point is off screen
 	return x<0||x>=(int)camera.width  ||y<0||y>=(int)camera.height; // entire screen
 }
+
 bool is_off_screen(const int x, const int y, const int stereo) { // check if point is off screen
 	switch(stereo) {
 		default: return x<                  0||x>=(int)camera.width  ||y<0||y>=(int)camera.height; // entire screen
@@ -42,6 +44,7 @@ bool is_off_screen(const int x, const int y, const int stereo) { // check if poi
 		case +1: return x<(int)camera.width/2||x>=(int)camera.width  ||y<0||y>=(int)camera.height; // right half
 	}
 }
+
 bool intersect_lines(const int x0, const int y0, const int x1, const int y1, const int xA, const int yA, const int xB, const int yB) { // check if two lines intersect
 	const float d = (float)((yB-yA)*(x1-x0)-(xB-xA)*(y1-y0));
 	if(d==0.0f) return false; // lines are parallel
@@ -49,9 +52,11 @@ bool intersect_lines(const int x0, const int y0, const int x1, const int y1, con
 	const float ub = ((x1-x0)*(y0-yA)-(y1-y0)*(x0-xA))/d;
 	return ua>=0.0f && ua<=1.0f && ub>=0.0f && ub<=1.0f;
 }
+
 bool intersect_line_rectangle(const int x0, const int y0, const int x1, const int y1, const int xA, const int yA, const int xB, const int yB) { // check if line intersects rectangle
 	return intersect_lines(x0, y0, x1, y1, xA, yA, xB, yA) || intersect_lines(x0, y0, x1, y1, xA, yB, xB, yB) || intersect_lines(x0, y0, x1, y1, xA, yA, xA, yB) || intersect_lines(x0, y0, x1, y1, xB, yA, xB, yB);
 }
+
 bool intersects_screen(const int x0, const int y0, const int x1, const int y1, const int stereo) {
 	switch(stereo) {
 		case  0: return intersect_line_rectangle(x0, y0, x1, y1,              0, 0, camera.width  , camera.height);
@@ -60,12 +65,14 @@ bool intersects_screen(const int x0, const int y0, const int x1, const int y1, c
 	}
 	return false;
 }
+
 void set_light(const uint i, const float3& position) {
 	if(i<light_sources_N) {
 		light_sources[i] = position;
 		light_sources_n = max(light_sources_n, i+1u);
 	}
 }
+
 int shading(const int color, const float3& p, const float3& normal, const bool translucent=false) {
 	const float nl2 = sq(normal.x)+sq(normal.y)+sq(normal.z); // only one sqrt instead of two
 	float br = 0.0f;
@@ -77,6 +84,7 @@ int shading(const int color, const float3& p, const float3& normal, const bool t
 	}
 	return color_mul(color, fmax(1.25f*br, 0.3f));
 }
+
 ulong get_font_pixels(const int character) {
 	const ulong pixels[224] = { // font data (my own 6x11 monospace font)
 		0x0000000000000000ull, 0x2082082080082000ull, 0x5145000000000000ull, 0x514F94514F945000ull, 0x21CAA870AA9C2000ull, 0x4AA50421052A9000ull, 0x2145085628A27400ull, 0x2082000000000000ull,
@@ -110,6 +118,7 @@ ulong get_font_pixels(const int character) {
 	};
 	return pixels[clamp(character+256*(character<0)-32, 0, 223)];
 }
+
 void draw(const int x, const int y, const float z, const int color, const int stereo) {
 	const int index=x+y*(int)camera.width, iz=(int)(z*(2147483647.0f/10000.0f));
 	if(!is_off_screen(x, y, stereo)&&iz>camera.zbuffer[index]) {
@@ -117,12 +126,14 @@ void draw(const int x, const int y, const float z, const int color, const int st
 		camera.bitmap[index] = color; // only draw if point is on screen and first in zbuffer
 	}
 }
+
 void convert_pixel(const float3& p, const int color, const int stereo) {
 	int rx, ry; float rz;
 	if(convert(rx, ry, rz, p, stereo) && !is_off_screen(rx, ry, stereo)) {
 		draw(rx, ry, rz, color, stereo);
 	}
 }
+
 void convert_circle(const float3& p, const float r, const int color, const int stereo) {
 	int rx, ry; float rz;
 	if(convert(rx, ry, rz, p, stereo)) {
@@ -149,6 +160,7 @@ void convert_circle(const float3& p, const float r, const int color, const int s
 		}
 	}
 }
+
 void convert_line(const float3& p0, const float3& p1, const int color, const int stereo) {
 	int r0x, r0y, r1x, r1y; float r0z, r1z;
 	if(convert(r0x, r0y, r0z, p0, stereo) && convert(r1x, r1y, r1z, p1, stereo)
@@ -166,6 +178,7 @@ void convert_line(const float3& p0, const float3& p1, const int color, const int
 		}
 	}
 }
+
 void convert_triangle(const float3& p0, const float3& p1, const float3& p2, const int color, const int stereo) {
 	int r0x, r0y, r1x, r1y, r2x, r2y; float r0z, r1z, r2z;
 	if(convert(r0x, r0y, r0z, p0, stereo) && convert(r1x, r1y, r1z, p1, stereo) && convert(r2x, r2y, r2z, p2, stereo)
@@ -192,6 +205,7 @@ void convert_triangle(const float3& p0, const float3& p1, const float3& p2, cons
 		}
 	}
 }
+
 void convert_triangle_interpolated(const float3& p0, const float3& p1, const float3& p2, int c0, int c1, int c2, const int stereo) {
 	int r0x, r0y, r1x, r1y, r2x, r2y; float r0z, r1z, r2z;
 	if(convert(r0x, r0y, r0z, p0, stereo) && convert(r1x, r1y, r1z, p1, stereo) && convert(r2x, r2y, r2z, p2, stereo)
@@ -227,6 +241,7 @@ void convert_triangle_interpolated(const float3& p0, const float3& p1, const flo
 		}
 	}
 }
+
 void convert_text(const float3& p, const string& s, const float r, const int color, const int stereo) {
 	int rx, ry; float rz;
 	if(convert(rx, ry, rz, p, stereo)) {
@@ -514,6 +529,143 @@ int main(int argc, char* argv[]) { // call WinMain from dummy main function in o
 	return WinMain(GetModuleHandle(0), 0, GetCommandLineA(), SW_SHOWMINIMIZED);
 }
 #endif // GRAPHICS_CONSOLE
+
+#ifdef BOX_VIEWPORT_6
+// Helper function to re-aim the single camera at each of the 6 box sides
+// Helper function to point the camera at the 6 sides of the domain box
+void set_camera_transform_for_view(Camera& cam, int view_index) {
+    switch (view_index) {
+        case 0: cam.rx = 0.5 * pi; cam.ry = 0.5 * pi; break; // Side 1 (-Z / Bottom)
+        case 1: cam.rx = 0.0;      cam.ry = pi;       break; // Side 2 (+X / Right)
+        case 2: cam.rx = 0.5 * pi; cam.ry = pi;       break; // Side 3 (+Y / Front)
+        case 3: cam.rx = 0.5 * pi; cam.ry = 1.5 * pi; break; // Side 4 (+Z / Top)
+        case 4: cam.rx = pi;       cam.ry = pi;       break; // Side 5 (-X / Left)
+        case 5: cam.rx = 1.5 * pi; cam.ry = pi;       break; // Side 6 (-Y / Back)
+    }
+
+	cam.lockmouse = true;
+	if (view_index == 0) {
+		cam.set_zoom(64.0f);
+	}
+	else {
+		cam.set_zoom(85.0f);
+		
+	}
+	cam.fov = 10.0f;
+    cam.update_matrix();
+}
+
+// Array of labels matching the 6 box sides
+const string view_labels[6] = {
+    "1: Bottom (-Z)",
+    "2: Right (+X)",
+    "3: Front (+Y)",
+    "4: Top (+Z)",
+    "5: Left (-X)",
+    "6: Back (-Y)"
+};
+
+INT WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ PSTR, _In_ INT) {
+    WNDCLASS wndClass = { 0, WndProc, 0, 0, hInstance, LoadIcon(0, IDI_APPLICATION), LoadCursor(0, IDC_ARROW), (HBRUSH)GetStockObject(BLACK_BRUSH), 0, TEXT("WindowClass") };
+    RegisterClass(&wndClass);
+
+    MONITORINFO mi = { sizeof(mi) };
+    if (!GetMonitorInfo(MonitorFromWindow(0, MONITOR_DEFAULTTONEAREST), &mi)) return 1;
+
+    DEVMODE lpDevMode = { 0 };
+    const uint width  = (uint)(mi.rcMonitor.right - mi.rcMonitor.left);
+    const uint height = (uint)(mi.rcMonitor.bottom - mi.rcMonitor.top);
+    const uint fps_limit = (uint)EnumDisplaySettings(0, ENUM_CURRENT_SETTINGS, &lpDevMode) != 0 ? (uint)lpDevMode.dmDisplayFrequency : 60u;
+
+    ShowCursor(false);
+    SetCursorPos(width / 2, height / 2);
+
+    window = CreateWindow("WindowClass", WINDOW_NAME, WS_POPUP | WS_VISIBLE, mi.rcMonitor.left, mi.rcMonitor.top, width, height, 0, 0, hInstance, 0);
+    displayDC = GetDC(window);
+    memDC = CreateCompatibleDC(displayDC);
+    frameDC = CreateCompatibleBitmap(displayDC, width, height);
+    SelectObject(memDC, frameDC);
+
+    const uint vp_width  = width / 3;
+    const uint vp_height = height / 2;
+
+    BITMAPINFO bmi = { 0 };
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = vp_width;
+    bmi.bmiHeader.biHeight = -(int)vp_height;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    camera = Camera(vp_width, vp_height, fps_limit);
+	// step the sim
+    thread compute_thread(main_physics);
+
+    Clock clock;
+    double frametime = 1.0;
+    MSG msg = { 0 };
+
+    while (msg.message != WM_QUIT) {
+        while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) break;
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        if (!running) break;
+
+        camera.rendring_frame.lock();
+
+        for (int i = 0; i < 6; i++) {
+            int vp_x = (i % 3) * vp_width;
+            int vp_y = (i / 3) * vp_height;
+
+            // 1. Orient camera
+            set_camera_transform_for_view(camera, i);
+            camera.update_state(fmax(1.0 / (double)camera.fps_limit, frametime));
+
+            // 2. Render graphics scene into camera.bitmap
+            main_graphics();
+
+            // 3. Draw text label into camera.bitmap at offset (10, 10) in white (0xFFFFFF)
+            draw_text(10, 10, view_labels[i], 0xFFFFFF);
+
+            // 4. Blit camera.bitmap to memDC tile offset
+            SetDIBitsToDevice(
+                memDC,
+                vp_x, vp_y,
+                vp_width, vp_height,
+                0, 0,
+                0, vp_height,
+                camera.bitmap,
+                &bmi,
+                DIB_RGB_COLORS
+            );
+        }
+
+        // 5. Present frame
+        BitBlt(displayDC, 0, 0, width, height, memDC, 0, 0, SRCCOPY);
+
+        camera.rendring_frame.unlock();
+
+        frametime = clock.stop();
+        sleep(1.0 / (double)camera.fps_limit - frametime);
+        clock.start();
+    }
+
+    SelectObject(memDC, NULL);
+    DeleteObject(frameDC);
+    DeleteDC(memDC);
+    ReleaseDC(window, displayDC);
+
+    if (compute_thread.joinable()) {
+        compute_thread.join();
+    }
+
+    return 0;
+}
+
+#else
+
 INT WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ PSTR, _In_ INT) {
 	WNDCLASS wndClass = { 0, WndProc, 0, 0, hInstance, LoadIcon(0, IDI_APPLICATION), LoadCursor(0, IDC_ARROW), (HBRUSH)GetStockObject(BLACK_BRUSH), 0, TEXT("WindowClass") };
 	RegisterClass(&wndClass);
@@ -560,6 +712,11 @@ INT WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ PSTR, _In_
 	compute_thread.join();
 	return 0;
 }
+
+
+
+#endif
+
 
 #elif defined(__linux__)||defined(__APPLE__)
 

@@ -1,62 +1,105 @@
+
+
+
 #include "setup.hpp"
+#include <chrono>
 
 
 
-#ifdef BENCHMARK
-#include "info.hpp"
-void main_setup() { // benchmark; required extensions in defines.hpp: BENCHMARK, optionally FP16S or FP16C
+// make sure to enable "#define BOX_VIEWPORT_6" in defines.hpp for the full 6 side box view.
+void main_setup() { // glass box, water at 50% height, gravity direction switches every 5 seconds; required extensions in defines.hpp: VOLUME_FORCE, SURFACE, INTERACTIVE_GRAPHICS, optionally FP16S
 	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
-	uint mlups = 0u; {
-
-		//LBM lbm( 32u,  32u,  32u, 1.0f);
-		//LBM lbm( 64u,  64u,  64u, 1.0f);
-		//LBM lbm(128u, 128u, 128u, 1.0f);
-		LBM lbm(256u, 256u, 256u, 1.0f); // default
-		//LBM lbm(384u, 384u, 384u, 1.0f);
-		//LBM lbm(512u, 512u, 512u, 1.0f);
-
-		//const uint memory = 1488u; // memory occupation in MB (for multi-GPU benchmarks: make this close to as large as the GPU's VRAM capacity)
-		//const uint3 lbm_N = (resolution(float3(1.0f, 1.0f, 1.0f), memory)/4u)*4u; // input: simulation box aspect ratio and VRAM occupation in MB, output: grid resolution
-		//LBM lbm(1u*lbm_N.x, 1u*lbm_N.y, 1u*lbm_N.z, 1u, 1u, 1u, 1.0f); // 1 GPU
-		//LBM lbm(2u*lbm_N.x, 1u*lbm_N.y, 1u*lbm_N.z, 2u, 1u, 1u, 1.0f); // 2 GPUs
-		//LBM lbm(2u*lbm_N.x, 2u*lbm_N.y, 1u*lbm_N.z, 2u, 2u, 1u, 1.0f); // 4 GPUs
-		//LBM lbm(2u*lbm_N.x, 2u*lbm_N.y, 2u*lbm_N.z, 2u, 2u, 2u, 1.0f); // 8 GPUs
-
-		// #########################################################################################################################################################################################
-		for(uint i=0u; i<1000u; i++) {
-			lbm.run(10u, 1000u*10u);
-			mlups = max(mlups, to_uint((double)lbm.get_N()*1E-6/info.runtime_lbm_timestep_smooth));
-		}
-	} // make lbm object go out of scope to free its memory
-	print_info("Peak MLUPs/s = "+to_string(mlups));
-#if defined(_WIN32)
-	wait();
-#endif // Windows
-} /**/
-#endif // BENCHMARK
-
-
-
-/*void main_setup() { // 3D Taylor-Green vortices; required extensions in defines.hpp: INTERACTIVE_GRAPHICS
-	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
-	LBM lbm(128u, 128u, 128u, 1u, 1u, 1u, 0.01f);
+	const float g = 0.0005f; // gravity magnitude in LBM units
+	const uint res = 90u;
+	LBM lbm(res, res, res, 0.02f, 0.0f, 0.0f, -g); // starts with gravity pointing -z (side 1 = floor)
 	// ###################################################################################### define geometry ######################################################################################
-	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x=0u, y=0u, z=0u; lbm.coordinates(n, x, y, z);
-		const float A = 0.25f;
-		const uint periodicity = 1u;
-		const float a=(float)Nx/(float)periodicity, b=(float)Ny/(float)periodicity, c=(float)Nz/(float)periodicity;
-		const float fx = (float)x+0.5f-0.5f*(float)Nx;
-		const float fy = (float)y+0.5f-0.5f*(float)Ny;
-		const float fz = (float)z+0.5f-0.5f*(float)Nz;
-		lbm.u.x[n] =  A*cosf(2.0f*pif*fx/a)*sinf(2.0f*pif*fy/b)*sinf(2.0f*pif*fz/c);
-		lbm.u.y[n] = -A*sinf(2.0f*pif*fx/a)*cosf(2.0f*pif*fy/b)*sinf(2.0f*pif*fz/c);
-		lbm.u.z[n] =  A*sinf(2.0f*pif*fx/a)*sinf(2.0f*pif*fy/b)*cosf(2.0f*pif*fz/c);
-		lbm.rho[n] = 1.0f-sq(A)*3.0f/4.0f*(cosf(4.0f*pif*fx/a)+cosf(4.0f*pif*fy/b));
-	}); // ####################################################################### run simulation, export images and data ##########################################################################
-	lbm.graphics.visualization_modes = VIS_STREAMLINES;
-	lbm.run();
-	//lbm.run(1000u); lbm.u.read_from_device(); println(lbm.u.x[lbm.index(Nx/2u, Ny/2u, Nz/2u)]); wait(); // test for binary identity
-} /**/
+	const uint Nx = lbm.get_Nx(), Ny = lbm.get_Ny(), Nz = lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x = 0u, y = 0u, z = 0u; lbm.coordinates(n, x, y, z);
+	if (z < Nz / 2u) lbm.flags[n] = TYPE_F; // water fills bottom 50% of box height
+	if (x == 0u || x == Nx - 1u || y == 0u || y == Ny - 1u || z == 0u || z == Nz - 1u) lbm.flags[n] = TYPE_S; // closed glass box on all 6 sides
+		}); // ####################################################################### run simulation, export images and data ##########################################################################
+	lbm.graphics.visualization_modes = lbm.get_D() == 1u ? VIS_PHI_RAYTRACE : VIS_PHI_RASTERIZE;
+
+	const float3 side_gravity[6] = {
+		float3(0.0f, 0.0f, -g), // side 1
+		float3(+g, 0.0f, 0.0f), // side 2
+		float3(0.0f, +g, 0.0f), // side 3
+		float3(0.0f, 0.0f, +g), // side 4
+		float3(-g, 0.0f, 0.0f), // side 5
+		float3(0.0f, -g, 0.0f)  // side 6
+	};
+	uint side = 0u;
+	auto last_switch = std::chrono::steady_clock::now();
+
+	lbm.run(0u); // initialize simulation on GPU
+	while (true) { // main simulation loop
+		const auto now = std::chrono::steady_clock::now();
+		if (std::chrono::duration<double>(now - last_switch).count() >= 5.0) {
+			side = (side + 1u) % 6u;
+			lbm.set_f(side_gravity[side].x, side_gravity[side].y, side_gravity[side].z);
+			print_info("gravity -> side " + to_string(side + 1u));
+			last_switch = now;
+		}
+		lbm.run(20u); // small chunks so the 5s check stays accurate without per-step overhead
+	}
+}
+
+
+//#ifdef BENCHMARK
+//#include "info.hpp"
+//void main_setup() { // benchmark; required extensions in defines.hpp: BENCHMARK, optionally FP16S or FP16C
+//	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
+//	uint mlups = 0u; {
+//
+//		//LBM lbm( 32u,  32u,  32u, 1.0f);
+//		//LBM lbm( 64u,  64u,  64u, 1.0f);
+//		//LBM lbm(128u, 128u, 128u, 1.0f);
+//		LBM lbm(256u, 256u, 256u, 1.0f); // default
+//		//LBM lbm(384u, 384u, 384u, 1.0f);
+//		//LBM lbm(512u, 512u, 512u, 1.0f);
+//
+//		//const uint memory = 1488u; // memory occupation in MB (for multi-GPU benchmarks: make this close to as large as the GPU's VRAM capacity)
+//		//const uint3 lbm_N = (resolution(float3(1.0f, 1.0f, 1.0f), memory)/4u)*4u; // input: simulation box aspect ratio and VRAM occupation in MB, output: grid resolution
+//		//LBM lbm(1u*lbm_N.x, 1u*lbm_N.y, 1u*lbm_N.z, 1u, 1u, 1u, 1.0f); // 1 GPU
+//		//LBM lbm(2u*lbm_N.x, 1u*lbm_N.y, 1u*lbm_N.z, 2u, 1u, 1u, 1.0f); // 2 GPUs
+//		//LBM lbm(2u*lbm_N.x, 2u*lbm_N.y, 1u*lbm_N.z, 2u, 2u, 1u, 1.0f); // 4 GPUs
+//		//LBM lbm(2u*lbm_N.x, 2u*lbm_N.y, 2u*lbm_N.z, 2u, 2u, 2u, 1.0f); // 8 GPUs
+//
+//		// #########################################################################################################################################################################################
+//		for(uint i=0u; i<1000u; i++) {
+//			lbm.run(10u, 1000u*10u);
+//			mlups = max(mlups, to_uint((double)lbm.get_N()*1E-6/info.runtime_lbm_timestep_smooth));
+//		}
+//	} // make lbm object go out of scope to free its memory
+//	print_info("Peak MLUPs/s = "+to_string(mlups));
+//#if defined(_WIN32)
+//	wait();
+//#endif // Windows
+//} /**/
+//#endif BENCHMARK
+
+
+
+//void main_setup() { // 3D Taylor-Green vortices; required extensions in defines.hpp: INTERACTIVE_GRAPHICS
+//	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
+//	LBM lbm(128u, 128u, 128u, 1u, 1u, 1u, 0.01f);
+//	// ###################################################################################### define geometry ######################################################################################
+//	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x=0u, y=0u, z=0u; lbm.coordinates(n, x, y, z);
+//		const float A = 0.25f;
+//		const uint periodicity = 1u;
+//		const float a=(float)Nx/(float)periodicity, b=(float)Ny/(float)periodicity, c=(float)Nz/(float)periodicity;
+//		const float fx = (float)x+0.5f-0.5f*(float)Nx;
+//		const float fy = (float)y+0.5f-0.5f*(float)Ny;
+//		const float fz = (float)z+0.5f-0.5f*(float)Nz;
+//		lbm.u.x[n] =  A*cosf(2.0f*pif*fx/a)*sinf(2.0f*pif*fy/b)*sinf(2.0f*pif*fz/c);
+//		lbm.u.y[n] = -A*sinf(2.0f*pif*fx/a)*cosf(2.0f*pif*fy/b)*sinf(2.0f*pif*fz/c);
+//		lbm.u.z[n] =  A*sinf(2.0f*pif*fx/a)*sinf(2.0f*pif*fy/b)*cosf(2.0f*pif*fz/c);
+//		lbm.rho[n] = 1.0f-sq(A)*3.0f/4.0f*(cosf(4.0f*pif*fx/a)+cosf(4.0f*pif*fy/b));
+//	}); // ####################################################################### run simulation, export images and data ##########################################################################
+//	lbm.graphics.visualization_modes = VIS_STREAMLINES;
+//	lbm.run();
+//	lbm.run(1000u); lbm.u.read_from_device(); println(lbm.u.x[lbm.index(Nx/2u, Ny/2u, Nz/2u)]); wait(); // test for binary identity
+//} 
+
 
 
 
@@ -188,24 +231,24 @@ void main_setup() { // benchmark; required extensions in defines.hpp: BENCHMARK,
 
 
 
-/*void main_setup() { // cylinder in rectangular duct; required extensions in defines.hpp: VOLUME_FORCE, INTERACTIVE_GRAPHICS
-	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
-	const float Re = 25000.0f;
-	const float D = 64.0f;
-	const float u = rsqrt(3.0f);
-	const float w=D, l=12.0f*D, h=3.0f*D;
-	const float nu = units.nu_from_Re(Re, D, u);
-	const float f = units.f_from_u_rectangular_duct(w, D, 1.0f, nu, u);
-	LBM lbm(to_uint(w), to_uint(l), to_uint(h), nu, 0.0f, f, 0.0f);
-	// ###################################################################################### define geometry ######################################################################################
-	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x=0u, y=0u, z=0u; lbm.coordinates(n, x, y, z);
-		lbm.u.y[n] = 0.1f*u;
-		if(cylinder(x, y, z, float3(lbm.center().x, 2.0f*D, lbm.center().z), float3(Nx, 0u, 0u), 0.5f*D)) lbm.flags[n] = TYPE_S;
-		if(x==0u||x==Nx-1u||z==0u||z==Nz-1u) lbm.flags[n] = TYPE_S; // x and z non periodic
-	}); // ####################################################################### run simulation, export images and data ##########################################################################
-	lbm.graphics.visualization_modes = VIS_FLAG_LATTICE|VIS_Q_CRITERION;
-	lbm.run();
-} /**/
+//void main_setup() { // cylinder in rectangular duct; required extensions in defines.hpp: VOLUME_FORCE, INTERACTIVE_GRAPHICS
+//	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
+//	const float Re = 25000.0f;
+//	const float D = 64.0f;
+//	const float u = rsqrt(3.0f);
+//	const float w=D, l=12.0f*D, h=3.0f*D;
+//	const float nu = units.nu_from_Re(Re, D, u);
+//	const float f = units.f_from_u_rectangular_duct(w, D, 1.0f, nu, u);
+//	LBM lbm(to_uint(w), to_uint(l), to_uint(h), nu, 0.0f, f, 0.0f);
+//	// ###################################################################################### define geometry ######################################################################################
+//	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x=0u, y=0u, z=0u; lbm.coordinates(n, x, y, z);
+//		lbm.u.y[n] = 0.1f*u;
+//		if(cylinder(x, y, z, float3(lbm.center().x, 2.0f*D, lbm.center().z), float3(Nx, 0u, 0u), 0.5f*D)) lbm.flags[n] = TYPE_S;
+//		if(x==0u||x==Nx-1u||z==0u||z==Nz-1u) lbm.flags[n] = TYPE_S; // x and z non periodic
+//	}); // ####################################################################### run simulation, export images and data ##########################################################################
+//	lbm.graphics.visualization_modes = VIS_FLAG_LATTICE|VIS_Q_CRITERION;
+//	lbm.run();
+//} 
 
 
 
