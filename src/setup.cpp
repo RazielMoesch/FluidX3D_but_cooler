@@ -1,105 +1,753 @@
-
-
-
 #include "setup.hpp"
-#include <chrono>
+#ifdef BENCHMARK
+#include "info.hpp"
 
 
 
-// make sure to enable "#define BOX_VIEWPORT_6" in defines.hpp for the full 6 side box view.
-void main_setup() { // glass box, water at 50% height, gravity direction switches every 5 seconds; required extensions in defines.hpp: VOLUME_FORCE, SURFACE, INTERACTIVE_GRAPHICS, optionally FP16S
+void main_setup() { // benchmark; required extensions in defines.hpp: BENCHMARK, optionally FP16S or FP16C
 	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
-	const float g = 0.0005f; // gravity magnitude in LBM units
-	const uint res = 90u;
-	LBM lbm(res, res, res, 0.02f, 0.0f, 0.0f, -g); // starts with gravity pointing -z (side 1 = floor)
-	// ###################################################################################### define geometry ######################################################################################
-	const uint Nx = lbm.get_Nx(), Ny = lbm.get_Ny(), Nz = lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x = 0u, y = 0u, z = 0u; lbm.coordinates(n, x, y, z);
-	if (z < Nz / 2u) lbm.flags[n] = TYPE_F; // water fills bottom 50% of box height
-	if (x == 0u || x == Nx - 1u || y == 0u || y == Ny - 1u || z == 0u || z == Nz - 1u) lbm.flags[n] = TYPE_S; // closed glass box on all 6 sides
-		}); // ####################################################################### run simulation, export images and data ##########################################################################
-	lbm.graphics.visualization_modes = lbm.get_D() == 1u ? VIS_PHI_RAYTRACE : VIS_PHI_RASTERIZE;
+	uint mlups = 0u; {
 
-	const float3 side_gravity[6] = {
-		float3(0.0f, 0.0f, -g), // side 1
-		float3(+g, 0.0f, 0.0f), // side 2
-		float3(0.0f, +g, 0.0f), // side 3
-		float3(0.0f, 0.0f, +g), // side 4
-		float3(-g, 0.0f, 0.0f), // side 5
-		float3(0.0f, -g, 0.0f)  // side 6
-	};
-	uint side = 0u;
-	auto last_switch = std::chrono::steady_clock::now();
+		//LBM lbm( 32u,  32u,  32u, 1.0f);
+		//LBM lbm( 64u,  64u,  64u, 1.0f);
+		//LBM lbm(128u, 128u, 128u, 1.0f);
+		LBM lbm(256u, 256u, 256u, 1.0f); // default
+		//LBM lbm(384u, 384u, 384u, 1.0f);
+		//LBM lbm(512u, 512u, 512u, 1.0f);
 
-	lbm.run(0u); // initialize simulation on GPU
-	while (true) { // main simulation loop
-		const auto now = std::chrono::steady_clock::now();
-		if (std::chrono::duration<double>(now - last_switch).count() >= 5.0) {
-			side = (side + 1u) % 6u;
-			lbm.set_f(side_gravity[side].x, side_gravity[side].y, side_gravity[side].z);
-			print_info("gravity -> side " + to_string(side + 1u));
-			last_switch = now;
+		//const uint memory = 1488u; // memory occupation in MB (for multi-GPU benchmarks: make this close to as large as the GPU's VRAM capacity)
+		//const uint3 lbm_N = (resolution(float3(1.0f, 1.0f, 1.0f), memory)/4u)*4u; // input: simulation box aspect ratio and VRAM occupation in MB, output: grid resolution
+		//LBM lbm(1u*lbm_N.x, 1u*lbm_N.y, 1u*lbm_N.z, 1u, 1u, 1u, 1.0f); // 1 GPU
+		//LBM lbm(2u*lbm_N.x, 1u*lbm_N.y, 1u*lbm_N.z, 2u, 1u, 1u, 1.0f); // 2 GPUs
+		//LBM lbm(2u*lbm_N.x, 2u*lbm_N.y, 1u*lbm_N.z, 2u, 2u, 1u, 1.0f); // 4 GPUs
+		//LBM lbm(2u*lbm_N.x, 2u*lbm_N.y, 2u*lbm_N.z, 2u, 2u, 2u, 1.0f); // 8 GPUs
+
+		// #########################################################################################################################################################################################
+		for(uint i=0u; i<1000u; i++) {
+			lbm.run(10u, 1000u*10u);
+			mlups = max(mlups, to_uint((double)lbm.get_N()*1E-6/info.runtime_lbm_timestep_smooth));
 		}
-		lbm.run(20u); // small chunks so the 5s check stays accurate without per-step overhead
+	} // make lbm object go out of scope to free its memory
+	print_info("Peak MLUPs/s = "+to_string(mlups));
+#if defined(_WIN32)
+	wait();
+#endif // Windows
+} /**/
+#endif // BENCHMARK
+
+
+
+
+
+
+
+/// MY OWN BOX TEST FOR FIRST PROJECT (THIS USES KEYS TO CONTROL GRAVITY DIRECTION)
+
+/*
+ void main_setup() { // cube with changing gravity; required extensions in defines.hpp: FP16S, VOLUME_FORCE, SURFACE, INTERACTIVE_GRAPHICS
+	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
+	LBM lbm(90u, 90u, 90u, 0.02f, 0.0f, 0.0f, -0.001f, 0.001f);
+
+	// ###################################################################################### define geometry ######################################################################################
+	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); 
+	parallel_for(lbm.get_N(), [&](ulong n) { 
+		uint x=0u, y=0u, z=0u; 
+		lbm.coordinates(n, x, y, z);
+
+		if(x<Nx*2u/3u&&y<Ny*2u/3u) lbm.flags[n] = TYPE_F;
+
+		if(x==0u||x==Nx-1u||y==0u||y==Ny-1u||z==0u||z==Nz-1u) 
+		
+		lbm.flags[n] = TYPE_S;
+
+	}); 
+	// ####################################################################### run simulation, export images and data ##########################################################################
+	lbm.graphics.visualization_modes = lbm.get_D()== 1u ? VIS_PHI_RAYTRACE : VIS_PHI_RASTERIZE;
+
+	//lbm.graphics.visualization_modes = VIS_FLAG_LATTICE|VIS_STREAMLINES;
+	lbm.run(0u);
+    // Initial gravity force
+    float fx = 0.0f, fy = 0.0f, fz = -0.001f;
+    lbm.set_f(fx, fy, fz);
+
+    // Main loop
+    while (true) {
+        // User input: WASD changes direction
+        if (camera.get_key_state('W')) { fx = 0.0f; fy = +0.001f; fz = 0.0f; }  // move up
+        if (camera.get_key_state('S')) { fx = 0.0f; fy = -0.001f; fz = 0.0f; }  // move down
+        if (camera.get_key_state('A')) { fx = -0.001f; fy = 0.0f; fz = 0.0f; }  // move left
+        if (camera.get_key_state('D')) { fx = +0.001f; fy = 0.0f; fz = 0.0f; }  // move right
+        if (camera.get_key_state(' '))  { fx = 0.0f; fy = 0.0f; fz = 0.0f; }    // stop
+
+        // Apply the updated force vector
+        lbm.set_f(fx, fy, fz);
+
+
+        // Run the simulation for some iterations and render
+        lbm.run(5u);
+    }
+}
+ */
+
+
+
+
+
+
+
+
+ /*
+
+
+// SECOND VERSION IMPLEMENT OF BOX CHNAGING GRAVITY BASED Of mouse MOVEMENT
+
+// ------------------------
+// Main setup
+// ------------------------
+void main_setup()
+{
+    // --------------------------
+    // Initialize LBM simulation
+    // --------------------------
+    LBM lbm(90u, 90u, 90u, 0.02f, 0.0f, 0.0f, -0.001f, 0.001f);
+    camera.lockmouse = true;
+
+    const uint Nx = lbm.get_Nx();
+    const uint Ny = lbm.get_Ny();
+    const uint Nz = lbm.get_Nz();
+
+    parallel_for(lbm.get_N(), [&](ulong n) {
+        uint x=0u, y=0u, z=0u;
+        lbm.coordinates(n,x,y,z);
+
+	if(x < Nx*5u/6u && y < Ny*5u/6u)            
+	lbm.flags[n] = TYPE_F;
+
+        if(x==0u || x==Nx-1u ||
+           y==0u || y==Ny-1u ||
+           z==0u || z==Nz-1u)
+            lbm.flags[n] = TYPE_S;
+    });
+
+    lbm.graphics.visualization_modes =
+        lbm.get_D()==1u ? VIS_PHI_RAYTRACE : VIS_PHI_RASTERIZE;
+
+    lbm.run(0u);
+
+    const float gravity_strength = 0.001f;
+    float yaw = 0.0f;
+    float pitch = 0.0f;
+
+
+    // --------------------------
+    // Main loop
+    // --------------------------
+    while(true)
+    {
+        // --- read cursor ---
+        POINT p;
+        GetCursorPos(&p);
+        int cx = camera.width / 2;
+        int cy = camera.height / 2;
+        yaw   += (cx - p.x) * 0.002f;
+        pitch += (cy - p.y) * 0.002f;
+        SetCursorPos(cx, cy);
+
+        // --- compute gravity ---
+        float gx = sin(yaw) * cos(pitch);
+        float gy = sin(pitch);
+        float gz = -cos(yaw) * cos(pitch);
+        lbm.set_f(gravity_strength*gx, gravity_strength*gy, gravity_strength*gz);
+
+        // --- run simulation ---
+        lbm.run(5u);
+    }
+}
+	*/
+
+
+/*
+// SECOND VERSION IMPLEMENT OF BOX CHNAGING GRAVITY BASED OFF AcceloMETER DATA RECEIVED VIA UDP (DOES NOT WORK)
+#include <winsock2.h>
+#include <string>
+#pragma comment(lib, "ws2_32.lib")
+
+static SOCKET udpSocket = INVALID_SOCKET;
+
+static void udp_open(int port) {
+    WSADATA wsa;
+    WSAStartup(MAKEWORD(2,2), &wsa);
+    udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+    // Non-blocking
+    u_long mode = 1;
+    ioctlsocket(udpSocket, FIONBIO, &mode);
+
+    sockaddr_in addr = {};
+    addr.sin_family      = AF_INET;
+    addr.sin_port        = htons(port);
+    addr.sin_addr.s_addr = INADDR_ANY;
+    bind(udpSocket, (sockaddr*)&addr, sizeof(addr));
+}
+
+// Returns false if no packet waiting
+static bool udp_read(float& dx, float& dy) {
+    char buf[64];
+    int len = recv(udpSocket, buf, sizeof(buf)-1, 0);
+    if (len <= 0) return false;
+
+    buf[len] = '\0';
+
+    return sscanf_s(buf, "%f,%f", &dx, &dy) == 2;
+}
+
+ void main_setup() {
+    udp_open(5005);
+
+    LBM lbm(80u, 80u, 80u, 0.02f, 0.0f, 0.0f, -0.001f, 0.001f);
+
+    const uint Nx = lbm.get_Nx(), Ny = lbm.get_Ny(), Nz = lbm.get_Nz();
+    parallel_for(lbm.get_N(), [&](ulong n) {
+        uint x = 0u, y = 0u, z = 0u;
+        lbm.coordinates(n, x, y, z);
+        if (x < Nx*5u/6u && y < Ny*5u/6u) lbm.flags[n] = TYPE_F;
+        if (x==0u||x==Nx-1u||y==0u||y==Ny-1u||z==0u||z==Nz-1u)
+            lbm.flags[n] = TYPE_S;
+    });
+
+    lbm.graphics.visualization_modes = lbm.get_D()==1u ? VIS_PHI_RAYTRACE : VIS_PHI_RASTERIZE;
+    lbm.run(0u);
+
+    float yaw = 0.0f, pitch = 0.0f;
+
+#include <cmath>
+#include "lbm.hpp" // replace with your FluidX3D header
+
+float gravity_strength = 0.005f;
+float z_gravity = -0.002f;
+float smoothing_factor = 0.95f;
+
+static float smooth_fx = 0.0f;`
+static float smooth_fy = 0.0f;
+
+// UDP tilt read function
+float tiltX = 0.0f, tiltY = 0.0f;
+
+while (true) {
+    if (udp_read(tiltX, tiltY)) {
+        // Clamp incoming tilt
+        tiltX = fmaxf(-1.0f, fminf(1.0f, tiltX));
+        tiltY = fmaxf(-1.0f, fminf(1.0f, tiltY));
+
+        // Scale
+        float fx = tiltX * gravity_strength;
+        float fy = tiltY * gravity_strength;
+
+        // Clamp for solver stability
+        fx = fmaxf(-0.1f, fminf(0.1f, fx));
+        fy = fmaxf(-0.1f, fminf(0.1f, fy));
+
+        // Smooth forces
+        smooth_fx = smooth_fx * smoothing_factor + fx * (1.0f - smoothing_factor);
+        smooth_fy = smooth_fy * smoothing_factor + fy * (1.0f - smoothing_factor);
+
+        lbm.set_f(smooth_fx, smooth_fy, z_gravity);
+    }
+
+    lbm.run(1u); // small step per frame
+}}
+
+
+*/
+
+
+
+
+/*
+#include <random>
+
+/// Engine particle system rheoscopic visualization
+// Requires defines: VOLUME_FORCE, SURFACE, PARTICLES, INTERACTIVE_GRAPHICS
+void main_setup() {
+
+    // Setup LBM simulation
+    const uint  NX = 95u, NY = 95u, NZ = 95u;
+    const float nu = 0.08f;   // was .02 
+
+    const float fx0 = 0.0f, fy0 = 0.0f, fz0 = -0.001f;
+
+    // Particle settings - passive tracers
+    const uint particle_count = 10000u; // this will create 10000 particles
+    
+    LBM lbm(NX, NY, NZ, nu, particle_count);
+
+    const uint Nx = lbm.get_Nx();
+    const uint Ny = lbm.get_Ny();
+    const uint Nz = lbm.get_Nz();
+
+	// GEOMETRY SETUP
+ 	parallel_for(lbm.get_N(), [&](ulong n) {
+    uint x = 0u, y = 0u, z = 0u;
+    lbm.coordinates(n, x, y, z);
+
+    // Solid outer boundaries
+    if (x == 0u || x == Nx - 1u ||
+        y == 0u || y == Ny - 1u ||
+        z == 0u || z == Nz - 1u)
+    {
+        lbm.flags[n] = TYPE_S;
+        return;
+    }
+
+    if (z < Nz * 8u / 10u)
+        lbm.flags[n] = TYPE_F;
+});
+    //ENGINE particles
+    {
+
+uint seed = 42u;
+for(ulong n=0ull; n<lbm.particles->length(); n++) {
+	lbm.particles->x[n] = random_symmetric(seed, 0.25f*lbm.size().x); // this will palce the particles randomly anywhere in the simulation box
+	lbm.particles->y[n] = random_symmetric(seed, 0.25f*lbm.size().y);
+	lbm.particles->z[n] = random_symmetric(seed, 0.25f*lbm.size().z);
+}	
+}	
+	// ---------------------------------------------------------
+    lbm.graphics.visualization_modes =
+        (lbm.get_D() == 1u
+         ? VIS_PHI_RAYTRACE
+        : VIS_PHI_RASTERIZE)
+        | VIS_PARTICLES;
+
+
+    // Initialize surface & particles
+	    	lbm.run(0u);
+			
+    const float gravity_strength = 0.001f;
+// Inside your while(true) loop
+while (true) {
+    lbm.set_f(
+        gravity_strength * camera.R.yx,  // gravity x component
+        gravity_strength * camera.R.yy,  // gravity y component
+        gravity_strength * camera.R.yz   // gravity z component (downwards)
+    );
+
+    lbm.run(5u);
+}
+}
+*/
+
+
+///WORRKING VERSION FOR DISCOVERY DAY ACCELOMETER BUT NO CAMERA MOVEMENT
+/*
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <cmath>
+
+void main_setup() { // cube with changing gravity; required extensions in defines.hpp: FP16S, VOLUME_FORCE, SURFACE, INTERACTIVE_GRAPHICS
+
+    // ################### define simulation box size, viscosity and volume force ####################################
+    LBM lbm(90u, 90u, 90u, 0.02f, 0.0f, 0.0f, -0.001f, 0.001f);
+
+    // ################################################# define geometry #############################################
+    const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz();
+    parallel_for(lbm.get_N(), [&](ulong n) {
+        uint x=0u, y=0u, z=0u;
+        lbm.coordinates(n, x, y, z);
+        if(x<Nx*2u/3u&&y<Ny*2u/3u) lbm.flags[n] = TYPE_F;
+        if(x==0u||x==Nx-1u||y==0u||y==Ny-1u||z==0u||z==Nz-1u)
+            lbm.flags[n] = TYPE_S;
+    });
+
+    // #################################### run simulation, export images and data ##########################################
+    lbm.graphics.visualization_modes = lbm.get_D()==1u ? VIS_PHI_RAYTRACE : VIS_PHI_RASTERIZE;
+    lbm.run(0u);
+
+    // ------------------------------------------------------------------ UDP socket setup ------------------------------------------------------------------
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(2,2), &wsaData);
+
+    SOCKET udp_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+    // Non-blocking so simulation never stalls waiting for a packet
+    u_long mode = 1;
+    ioctlsocket(udp_socket, FIONBIO, &mode);
+
+    sockaddr_in server;
+    server.sin_family = AF_INET;
+    server.sin_port = htons(5005);
+    server.sin_addr.s_addr = INADDR_ANY;
+    bind(udp_socket, (sockaddr*)&server, sizeof(server));
+
+    // ------------------------------------------------------------------ gravity defaults ------------------------------------------------------------------
+    const float gravity_strength = 0.001f;
+    float fx = 0.0f, fy = 0.0f, fz = -gravity_strength;
+
+    char buf[64];
+
+    while (true) {
+        // ------------------------------------------------------------------ read UDP packet ------------------------------------------------------------------
+        int bytes = recv(udp_socket, buf, sizeof(buf)-1, 0);
+        if (bytes > 0) {
+            buf[bytes] = '\0';
+            float gx, gy, gz;
+            if (sscanf_s(buf, "%f,%f,%f", &gx, &gy, &gz) == 3) {
+                fx = gx * gravity_strength;
+                fy = gy * gravity_strength;
+                fz = gz * gravity_strength;
+            }
+        }
+
+        // ------------------------------------------------------------------ step simulation ------------------------------------------------------------------
+        lbm.set_f(fx, fy, fz);
+        lbm.run(5u);
+    }
+
+    closesocket(udp_socket);
+    WSACleanup();
+}
+*/
+
+
+
+
+///6 views 
+// cube with 6 face cameras + live-steerable gravity
+// required extensions in defines.hpp: FP16S, VOLUME_FORCE, SURFACE, GRAPHICS
+// (GRAPHICS, not INTERACTIVE_GRAPHICS -- this setup renders headless to disk)
+
+// cube with 6 face cameras, fixed gravity
+// required extensions in defines.hpp: FP16S, VOLUME_FORCE, SURFACE, GRAPHICS
+// (GRAPHICS, not INTERACTIVE_GRAPHICS -- this setup renders headless to disk)
+
+
+/// LIVE 6-CAMERA VIEW — interactive gravity control (WASD), continuously exports 6 angle
+/// frames at a short interval for an external live grid viewer to pick up.
+/// required extensions in defines.hpp: FP16S, VOLUME_FORCE, SURFACE, INTERACTIVE_GRAPHICS
+
+/*
+void main_setup() {
+	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
+	LBM lbm(90u, 90u, 90u, 0.02f, 0.0f, 0.0f, -0.001f, 0.001f);
+
+	// ###################################################################################### define geometry ######################################################################################
+	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz();
+	parallel_for(lbm.get_N(), [&](ulong n) {
+		uint x=0u, y=0u, z=0u;
+		lbm.coordinates(n, x, y, z);
+		if(x<Nx*2u/3u&&y<Ny*2u/3u) lbm.flags[n] = TYPE_F;
+		if(x==0u||x==Nx-1u||y==0u||y==Ny-1u||z==0u||z==Nz-1u) lbm.flags[n] = TYPE_S;
+	});
+
+	lbm.graphics.visualization_modes = lbm.get_D()==1u ? VIS_PHI_RAYTRACE : VIS_PHI_RASTERIZE;
+	lbm.run(0u);
+
+	// ############################################################### interactive gravity control + continuous 6-angle export #######################################################################
+	float fx = 0.0f, fy = 0.0f, fz = -0.001f;
+	lbm.set_f(fx, fy, fz);
+
+	const float d = 2.5f, fov = 60.0f;
+	const float fNx=(float)Nx, fNy=(float)Ny, fNz=(float)Nz;
+
+	// how many simulation steps between each 6-angle frame refresh — lower = more "live",
+	// but each refresh costs 6 render passes, so keep this from going to 1 unless your GPU
+	// has headroom. Start here and tune based on observed steps/second.
+	const uint frame_interval = 3u;
+	uint step_counter = 0u;
+
+	while (true) {
+		if (camera.get_key_state('W')) { fx = 0.0f; fy = +0.001f; fz = 0.0f; }
+		if (camera.get_key_state('S')) { fx = 0.0f; fy = -0.001f; fz = 0.0f; }
+		if (camera.get_key_state('A')) { fx = -0.001f; fy = 0.0f; fz = 0.0f; }
+		if (camera.get_key_state('D')) { fx = +0.001f; fy = 0.0f; fz = 0.0f; }
+		if (camera.get_key_state(' ')) { fx = 0.0f; fy = 0.0f; fz = 0.0f; }
+		lbm.set_f(fx, fy, fz);
+
+		lbm.run(1u);
+		step_counter++;
+
+		if (step_counter >= frame_interval) {
+			step_counter = 0u;
+
+			// 6 camera angles. Note: I haven't verified whether write_frame() overwrites a
+			// single filename per call site or accumulates a new numbered file each time —
+			// the viewer script handles either case by always reading the most recently
+			// modified file in each folder, and optionally pruning old ones (see --keep-recent).
+			lbm.graphics.set_camera_free(float3(d*fNx, 0.5f*fNy, 0.5f*fNz),    0.0f,   0.0f, fov);
+			lbm.graphics.write_frame(get_exe_path()+"live/px/");
+			lbm.graphics.set_camera_free(float3(fNx-d*fNx, 0.5f*fNy, 0.5f*fNz),180.0f,   0.0f, fov);
+			lbm.graphics.write_frame(get_exe_path()+"live/nx/");
+			lbm.graphics.set_camera_free(float3(0.5f*fNx, d*fNy, 0.5f*fNz),   -90.0f,   0.0f, fov);
+			lbm.graphics.write_frame(get_exe_path()+"live/py/");
+			lbm.graphics.set_camera_free(float3(0.5f*fNx, fNy-d*fNy, 0.5f*fNz),90.0f,   0.0f, fov);
+			lbm.graphics.write_frame(get_exe_path()+"live/ny/");
+			lbm.graphics.set_camera_free(float3(0.5f*fNx, 0.5f*fNy, d*fNz),     0.0f,  90.0f, fov);
+			lbm.graphics.write_frame(get_exe_path()+"live/pz/");
+			lbm.graphics.set_camera_free(float3(0.5f*fNx, 0.5f*fNy, fNz-d*fNz), 0.0f, -90.0f, fov);
+			lbm.graphics.write_frame(get_exe_path()+"live/nz/");
+		}
 	}
+}
+*/
+
+
+/*
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <cmath>
+
+void main_setup() { // cube with changing gravity; required extensions in defines.hpp: FP16S, VOLUME_FORCE, SURFACE, INTERACTIVE_GRAPHICS
+
+    // ################################################################## define simulation box size, viscosity and volume force ###################################################################
+    LBM lbm(90u, 90u, 90u, 0.02f, 0.0f, 0.0f, -0.001f, 0.001f);
+
+    // ###################################################################################### define geometry ######################################################################################
+    const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz();
+    parallel_for(lbm.get_N(), [&](ulong n) {
+        uint x=0u, y=0u, z=0u;
+        lbm.coordinates(n, x, y, z);
+        if(x<Nx*2u/3u&&y<Ny*2u/3u) lbm.flags[n] = TYPE_F;
+        if(x==0u||x==Nx-1u||y==0u||y==Ny-1u||z==0u||z==Nz-1u)
+            lbm.flags[n] = TYPE_S;
+    });
+
+    // ####################################################################### run simulation, export images and data ##########################################################################
+    lbm.graphics.visualization_modes = lbm.get_D()==1u ? VIS_PHI_RAYTRACE : VIS_PHI_RASTERIZE;
+    lbm.run(0u);
+
+    // ------------------------------------------------------------------ UDP socket setup ------------------------------------------------------------------
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(2,2), &wsaData);
+
+    SOCKET udp_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+    // Non-blocking so simulation never stalls waiting for a packet
+    u_long mode = 1;
+    ioctlsocket(udp_socket, FIONBIO, &mode);
+
+    sockaddr_in server;
+    server.sin_family = AF_INET;
+    server.sin_port = htons(5005);
+    server.sin_addr.s_addr = INADDR_ANY;
+    bind(udp_socket, (sockaddr*)&server, sizeof(server));
+
+    const float gravity_strength = 0.001f;
+    char buf[64];
+
+    while (true) {
+        // ------------------------------------------------------------------ read UDP packet ------------------------------------------------------------------
+        int bytes = recv(udp_socket, buf, sizeof(buf)-1, 0);
+        if (bytes > 0) {
+            buf[bytes] = '\0';
+            float gx, gy, gz;
+            if (sscanf_s(buf, "%f,%f,%f", &gx, &gy, &gz) == 3) {
+
+                // ---- Drive camera angles from accelerometer ----
+                float len = sqrtf(gx*gx + gy*gy + gz*gz);
+                if(len > 0.0f) {
+                    float gx_n = gx / len;
+                    float gy_n = gy / len;
+                    float gz_n = gz / len;
+
+                    camera.ry = asinf(fmaxf(-1.0f, fminf(1.0f, gz_n)));
+                    camera.rx = atan2f(-gx_n, -gy_n);
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------ gravity derived from camera exactly like original code ------------------------------------------------------------------
+        float3 down_cam = { +camera.R.yx, +camera.R.yy, +camera.R.yz };
+
+        float fx = gravity_strength * down_cam.x;
+        float fy = gravity_strength * down_cam.y;
+        float fz = gravity_strength * down_cam.z;
+
+        lbm.set_f(fx, fy, fz);
+        lbm.run(5u);
+    }
+
+    closesocket(udp_socket);
+    WSACleanup();
 }
 
 
-//#ifdef BENCHMARK
-//#include "info.hpp"
-//void main_setup() { // benchmark; required extensions in defines.hpp: BENCHMARK, optionally FP16S or FP16C
-//	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
-//	uint mlups = 0u; {
-//
-//		//LBM lbm( 32u,  32u,  32u, 1.0f);
-//		//LBM lbm( 64u,  64u,  64u, 1.0f);
-//		//LBM lbm(128u, 128u, 128u, 1.0f);
-//		LBM lbm(256u, 256u, 256u, 1.0f); // default
-//		//LBM lbm(384u, 384u, 384u, 1.0f);
-//		//LBM lbm(512u, 512u, 512u, 1.0f);
-//
-//		//const uint memory = 1488u; // memory occupation in MB (for multi-GPU benchmarks: make this close to as large as the GPU's VRAM capacity)
-//		//const uint3 lbm_N = (resolution(float3(1.0f, 1.0f, 1.0f), memory)/4u)*4u; // input: simulation box aspect ratio and VRAM occupation in MB, output: grid resolution
-//		//LBM lbm(1u*lbm_N.x, 1u*lbm_N.y, 1u*lbm_N.z, 1u, 1u, 1u, 1.0f); // 1 GPU
-//		//LBM lbm(2u*lbm_N.x, 1u*lbm_N.y, 1u*lbm_N.z, 2u, 1u, 1u, 1.0f); // 2 GPUs
-//		//LBM lbm(2u*lbm_N.x, 2u*lbm_N.y, 1u*lbm_N.z, 2u, 2u, 1u, 1.0f); // 4 GPUs
-//		//LBM lbm(2u*lbm_N.x, 2u*lbm_N.y, 2u*lbm_N.z, 2u, 2u, 2u, 1.0f); // 8 GPUs
-//
-//		// #########################################################################################################################################################################################
-//		for(uint i=0u; i<1000u; i++) {
-//			lbm.run(10u, 1000u*10u);
-//			mlups = max(mlups, to_uint((double)lbm.get_N()*1E-6/info.runtime_lbm_timestep_smooth));
-//		}
-//	} // make lbm object go out of scope to free its memory
-//	print_info("Peak MLUPs/s = "+to_string(mlups));
-//#if defined(_WIN32)
-//	wait();
-//#endif // Windows
-//} /**/
-//#endif BENCHMARK
+
+*/
+
+
+/*
+///////GYRO AND ACCEL FOR CAMERA AND GRAVITY
+
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <cmath>
+
+void main_setup() { // cube with changing gravity; required extensions in defines.hpp: FP16S, VOLUME_FORCE, SURFACE, INTERACTIVE_GRAPHICS
+
+    // ################################################################## define simulation box size, viscosity and volume force ###################################################################
+    LBM lbm(90u, 90u, 90u, 0.02f, 0.0f, 0.0f, -0.001f, 0.001f);
+
+    // ###################################################################################### define geometry ######################################################################################
+    const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz();
+    parallel_for(lbm.get_N(), [&](ulong n) {
+        uint x=0u, y=0u, z=0u;
+        lbm.coordinates(n, x, y, z);
+        if(x<Nx*2u/3u&&y<Ny*2u/3u) lbm.flags[n] = TYPE_F;
+        if(x==0u||x==Nx-1u||y==0u||y==Ny-1u||z==0u||z==Nz-1u)
+            lbm.flags[n] = TYPE_S;
+    });
+
+    // ####################################################################### run simulation, export images and data ##########################################################################
+    lbm.graphics.visualization_modes = lbm.get_D()==1u ? VIS_PHI_RAYTRACE : VIS_PHI_RASTERIZE;
+    lbm.run(0u);
+
+    // ------------------------------------------------------------------ UDP socket setup ------------------------------------------------------------------
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(2,2), &wsaData);
+
+    SOCKET udp_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+    u_long mode = 1;
+    ioctlsocket(udp_socket, FIONBIO, &mode);
+
+    sockaddr_in server;
+    server.sin_family = AF_INET;
+    server.sin_port = htons(5005);
+    server.sin_addr.s_addr = INADDR_ANY;
+    bind(udp_socket, (sockaddr*)&server, sizeof(server));
+
+    // ------------------------------------------------------------------ defaults ------------------------------------------------------------------
+    const float gravity_strength = 0.001f;
+    float fx = 0.0f, fy = 0.0f, fz = -gravity_strength;
+
+    char buf[128];
+
+    while (true) {
+        // ------------------------------------------------------------------ read UDP packet ------------------------------------------------------------------
+        int bytes = recv(udp_socket, buf, sizeof(buf)-1, 0);
+        if (bytes > 0) {
+            buf[bytes] = '\0';
+            float gx, gy, gz, rx, ry;
+            if (sscanf_s(buf, "%f,%f,%f,%f,%f", &gx, &gy, &gz, &rx, &ry) == 5) {
+
+                // ---- Gravity from accelerometer ----
+                fx = gx * gravity_strength;
+                fy = gy * gravity_strength;
+                fz = gz * gravity_strength;
+
+                // ---- Camera from gyroscope ----
+                // R key resets camera — handled by existing FluidX3D key input
+                camera.rx = rx;
+                camera.ry = ry;
+            }
+        }
+
+        lbm.set_f(fx, fy, fz);
+        lbm.run(5u);
+    }
+
+    closesocket(udp_socket);
+    WSACleanup();
+}
+*/
 
 
 
-//void main_setup() { // 3D Taylor-Green vortices; required extensions in defines.hpp: INTERACTIVE_GRAPHICS
-//	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
-//	LBM lbm(128u, 128u, 128u, 1u, 1u, 1u, 0.01f);
-//	// ###################################################################################### define geometry ######################################################################################
-//	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x=0u, y=0u, z=0u; lbm.coordinates(n, x, y, z);
-//		const float A = 0.25f;
-//		const uint periodicity = 1u;
-//		const float a=(float)Nx/(float)periodicity, b=(float)Ny/(float)periodicity, c=(float)Nz/(float)periodicity;
-//		const float fx = (float)x+0.5f-0.5f*(float)Nx;
-//		const float fy = (float)y+0.5f-0.5f*(float)Ny;
-//		const float fz = (float)z+0.5f-0.5f*(float)Nz;
-//		lbm.u.x[n] =  A*cosf(2.0f*pif*fx/a)*sinf(2.0f*pif*fy/b)*sinf(2.0f*pif*fz/c);
-//		lbm.u.y[n] = -A*sinf(2.0f*pif*fx/a)*cosf(2.0f*pif*fy/b)*sinf(2.0f*pif*fz/c);
-//		lbm.u.z[n] =  A*sinf(2.0f*pif*fx/a)*sinf(2.0f*pif*fy/b)*cosf(2.0f*pif*fz/c);
-//		lbm.rho[n] = 1.0f-sq(A)*3.0f/4.0f*(cosf(4.0f*pif*fx/a)+cosf(4.0f*pif*fy/b));
-//	}); // ####################################################################### run simulation, export images and data ##########################################################################
-//	lbm.graphics.visualization_modes = VIS_STREAMLINES;
-//	lbm.run();
-//	lbm.run(1000u); lbm.u.read_from_device(); println(lbm.u.x[lbm.index(Nx/2u, Ny/2u, Nz/2u)]); wait(); // test for binary identity
-//} 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+void main_setup() { // 3D Taylor-Green vortices; required extensions in defines.hpp: INTERACTIVE_GRAPHICS
+	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
+	LBM lbm(128u, 128u, 128u, 1u, 1u, 1u, 0.01f);
+	// ###################################################################################### define geometry ######################################################################################
+	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x=0u, y=0u, z=0u; lbm.coordinates(n, x, y, z);
+		const float A = 0.25f;
+		const uint periodicity = 1u;
+		const float a=(float)Nx/(float)periodicity, b=(float)Ny/(float)periodicity, c=(float)Nz/(float)periodicity;
+		const float fx = (float)x+0.5f-0.5f*(float)Nx;
+		const float fy = (float)y+0.5f-0.5f*(float)Ny;
+		const float fz = (float)z+0.5f-0.5f*(float)Nz;
+		lbm.u.x[n] =  A*cosf(2.0f*pif*fx/a)*sinf(2.0f*pif*fy/b)*sinf(2.0f*pif*fz/c);
+		lbm.u.y[n] = -A*sinf(2.0f*pif*fx/a)*cosf(2.0f*pif*fy/b)*sinf(2.0f*pif*fz/c);
+		lbm.u.z[n] =  A*sinf(2.0f*pif*fx/a)*sinf(2.0f*pif*fy/b)*cosf(2.0f*pif*fz/c);
+		lbm.rho[n] = 1.0f-sq(A)*3.0f/4.0f*(cosf(4.0f*pif*fx/a)+cosf(4.0f*pif*fy/b));
+	}); // ####################################################################### run simulation, export images and data ##########################################################################
+	lbm.graphics.visualization_modes = VIS_STREAMLINES;
+	lbm.run();
+	//lbm.run(1000u); lbm.u.read_from_device(); println(lbm.u.x[lbm.index(Nx/2u, Ny/2u, Nz/2u)]); wait(); // test for binary identity
+} /**/
 
 
 
@@ -231,24 +879,24 @@ void main_setup() { // glass box, water at 50% height, gravity direction switche
 
 
 
-//void main_setup() { // cylinder in rectangular duct; required extensions in defines.hpp: VOLUME_FORCE, INTERACTIVE_GRAPHICS
-//	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
-//	const float Re = 25000.0f;
-//	const float D = 64.0f;
-//	const float u = rsqrt(3.0f);
-//	const float w=D, l=12.0f*D, h=3.0f*D;
-//	const float nu = units.nu_from_Re(Re, D, u);
-//	const float f = units.f_from_u_rectangular_duct(w, D, 1.0f, nu, u);
-//	LBM lbm(to_uint(w), to_uint(l), to_uint(h), nu, 0.0f, f, 0.0f);
-//	// ###################################################################################### define geometry ######################################################################################
-//	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x=0u, y=0u, z=0u; lbm.coordinates(n, x, y, z);
-//		lbm.u.y[n] = 0.1f*u;
-//		if(cylinder(x, y, z, float3(lbm.center().x, 2.0f*D, lbm.center().z), float3(Nx, 0u, 0u), 0.5f*D)) lbm.flags[n] = TYPE_S;
-//		if(x==0u||x==Nx-1u||z==0u||z==Nz-1u) lbm.flags[n] = TYPE_S; // x and z non periodic
-//	}); // ####################################################################### run simulation, export images and data ##########################################################################
-//	lbm.graphics.visualization_modes = VIS_FLAG_LATTICE|VIS_Q_CRITERION;
-//	lbm.run();
-//} 
+/*void main_setup() { // cylinder in rectangular duct; required extensions in defines.hpp: VOLUME_FORCE, INTERACTIVE_GRAPHICS
+	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
+	const float Re = 25000.0f;
+	const float D = 64.0f;
+	const float u = rsqrt(3.0f);
+	const float w=D, l=12.0f*D, h=3.0f*D;
+	const float nu = units.nu_from_Re(Re, D, u);
+	const float f = units.f_from_u_rectangular_duct(w, D, 1.0f, nu, u);
+	LBM lbm(to_uint(w), to_uint(l), to_uint(h), nu, 0.0f, f, 0.0f);
+	// ###################################################################################### define geometry ######################################################################################
+	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); parallel_for(lbm.get_N(), [&](ulong n) { uint x=0u, y=0u, z=0u; lbm.coordinates(n, x, y, z);
+		lbm.u.y[n] = 0.1f*u;
+		if(cylinder(x, y, z, float3(lbm.center().x, 2.0f*D, lbm.center().z), float3(Nx, 0u, 0u), 0.5f*D)) lbm.flags[n] = TYPE_S;
+		if(x==0u||x==Nx-1u||z==0u||z==Nz-1u) lbm.flags[n] = TYPE_S; // x and z non periodic
+	}); // ####################################################################### run simulation, export images and data ##########################################################################
+	lbm.graphics.visualization_modes = VIS_FLAG_LATTICE|VIS_Q_CRITERION;
+	lbm.run();
+} /**/
 
 
 

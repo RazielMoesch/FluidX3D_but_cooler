@@ -18,12 +18,16 @@ void main_label(const double frametime); // implement these three
 void main_graphics();
 void main_physics();
 
+extern HWND window;
+extern HDC displayDC, memDC;
+extern HBITMAP frameDC;
+
 class Camera {
 public:
-	int* bitmap = nullptr; // make a copy of allocated bitmap/zbuffer pointers for deleting during destructor
+	int* bitmap = nullptr;
 	int* zbuffer = nullptr;
-	uint width = 1920u / 3u; // screen width
-	uint height = 1080u / 2u; // screen height
+	uint width = 1920u; // screen width
+	uint height = 1080u; // screen height
 	uint fps_limit = 60u; // default value for screen frames per second limit
 	float fov = 100.0f; // field of view, default: 100
 	float zoom=0.5f*(float)min(width, height), dis=0.5f*(float)width/tan(fov*pif/360.0f); // zoom, distance from camera to rotation center
@@ -35,15 +39,13 @@ public:
 	bool vr=false, tv=false; // virtual reality mode (enables stereoscopic rendering), VR TV mode
 	float eye_distance = 8.0f; // distance between cameras in VR mode
 	bool autorotation = false; // autorotation
-	bool lockmouse = false; // mouse movement won't change camera view when this is true
+	bool lockmouse = true; // mouse movement won't change camera view when this is true
 	std::atomic_bool key_update = true; // a key variable has been updated
 	std::atomic_bool allow_rendering = false; // allows interactive redering if true
 	std::atomic_bool allow_labeling = true; // allows drawing label if true
 	std::mutex rendring_frame; // a frame for interactive graphics is currently rendered
 
 private:
-	int* allocated_bitmap = nullptr;
-	int* allocated_zbuffer = nullptr;
 	float log_zoom=4.0f*log(zoom), target_log_zoom=log_zoom;
 	double mouse_x=0.0, mouse_y=0.0, target_mouse_x=0.0, target_mouse_y=0.0; // mouse position
 	double mouse_sensitivity = 1.0; // mouse sensitivity
@@ -56,15 +58,13 @@ public:
 		this->fps_limit = fps_limit;
 		bitmap = new int[width*height];
 		zbuffer = new int[width*height];
-		allocated_bitmap = bitmap; // make a copy of allocated bitmap/zbuffer pointers for deleting during destructor
-		allocated_zbuffer = zbuffer;
 		set_zoom(1.0f); // set initial zoom
 		update_matrix();
 	}
 	Camera() = default; // default constructor
 	~Camera() {
-		delete[] allocated_bitmap;
-		delete[] allocated_zbuffer;
+		delete[] bitmap;
+		delete[] zbuffer;
 	}
 	Camera& operator=(Camera&& camera) noexcept { // move assignment
 		this->width = camera.width;
@@ -72,8 +72,6 @@ public:
 		this->fps_limit = camera.fps_limit;
 		std::swap(bitmap, camera.bitmap);
 		std::swap(zbuffer, camera.zbuffer);
-		std::swap(allocated_bitmap, camera.allocated_bitmap);
-		std::swap(allocated_zbuffer, camera.allocated_zbuffer);
 		set_zoom(1.0f); // set initial zoom
 		update_matrix();
 		return *this;
@@ -115,7 +113,7 @@ public:
 			case '+': input_scroll_down(); break;
 			case '-': input_scroll_up(); break;
 			case 'F': input_F(); break;
-			case 27: running=false; exit(0);
+			case 27: running=false; println(); exit(0);
 		}
 #ifdef INTERACTIVE_GRAPHICS_ASCII
 		if(free) { // move free camera
@@ -327,13 +325,19 @@ private:
 		eye_distance += 0.2f;
 	}
 
-	void update_rotation(const double arx, const double ary) {
-		rx += radians(arx);
-		ry += radians(ary);
-		rx = fmod(rx, 2.0*pi);
-		ry = clamp(ry, 0.5*pi, 1.5*pi);
-		update_matrix();
-	}
+
+
+	///////CHANGED CAMERA SO IT CAN GO 360 DEGREES WITHOUT GIMBAL LOCK, AND ADDED SMOOTHING TO CAMERA MOVEMENT AND MOUSE MOVEMENT///////
+void update_rotation(const double arx, const double ary) {
+    rx += radians(arx);
+    ry += radians(ary);
+
+    rx = fmod(rx, 2.0*pi);
+    ry = fmod(ry, 2.0*pi);
+    if(ry < 0.0) ry += 2.0*pi;
+
+    update_matrix();
+}
 
 	double exp_decay(const double a, const double b, const double frametime, const double halflife=1.0) {
 		return b+(a-b)*exp2(-frametime/halflife);

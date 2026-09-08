@@ -95,8 +95,8 @@ The fastest and most memory efficient lattice Boltzmann CFD software, running on
   - fixed bug in voxelization ray direction for re-voxelizing rotating objects
   - fixed bug in `Mesh::get_bounding_box_size()`
   - fixed bug in `print_message()` function in `utilities.hpp`
-- [v2.10](https://github.com/ProjectPhysX/FluidX3D/releases/tag/v2.10) (05.11.2023) [changes](https://github.com/ProjectPhysX/FluidX3D/compare/v2.9...v2.10) (frustum culling)
-  - improved rasterization performance via frustum culling when only part of the simulation box is visible
+- [v2.10](https://github.com/ProjectPhysX/FluidX3D/releases/tag/v2.10) (05.11.2023) [changes](https://github.com/ProjectPhysX/FluidX3D/compare/v2.9...v2.10) (frustrum culling)
+  - improved rasterization performance via frustrum culling when only part of the simulation box is visible
   - improved switching between centered/free camera mode
   - refactored OpenCL rendering library
   - unit conversion factors are now automatically printed in console when `units.set_m_kg_s(...)` is used
@@ -110,7 +110,7 @@ The fastest and most memory efficient lattice Boltzmann CFD software, running on
   - interactive graphics on Linux are now in fullscreen mode too, fully matching Windows
   - made CPU/GPU buffer initialization significantly faster with `std::fill` and `enqueueFillBuffer` (overall ~8% faster simulation startup)
   - added operating system info to OpenCL device driver version printout
-  - fixed flickering with frustum culling at very small field of view
+  - fixed flickering with frustrum culling at very small field of view
   - fixed bug where rendered/exported frame was not updated when `visualization_modes` changed
 - [v2.12](https://github.com/ProjectPhysX/FluidX3D/releases/tag/v2.12) (18.01.2024) [changes](https://github.com/ProjectPhysX/FluidX3D/compare/v2.11...v2.12) (faster startup)
   - ~3x faster source code compiling on Linux using multiple CPU cores if [`make`](https://www.gnu.org/software/make/) is installed
@@ -244,20 +244,6 @@ The fastest and most memory efficient lattice Boltzmann CFD software, running on
   - improved "hydraulic jump" sample setup
   - updated GPU driver install instructions
   - disabled zero-copy on ARM iGPUs because `CL_MEM_USE_HOST_PTR` is broken there
-- [v3.6](https://github.com/ProjectPhysX/FluidX3D/releases/tag/v3.6) (24.03.2026) [changes](https://github.com/ProjectPhysX/FluidX3D/compare/v3.5...v3.6) (improved macOS graphics)
-  - improved `INTERACTIVE_GRAPHICS` support on macOS with XQuartz
-  - added `Mesh::get_center_of_mass()` function, for easy rotation of any balanced rotor
-  - made performance `mermaid` `gantt` chart in Readme properly colored
-  - more robust Intel GPU core/CU detecton via `CL_DEVICE_IP_VERSION_INTEL`
-  - OpenCL code refactoring
-  - set `nvidia_compute_capability` only for Nvidia GPUs not Nvidia CPUs
-  - fixed TFLOPs/s estimate for AMD CDNA3/4 GPUs
-  - fixed Device Name and CU reporting for AMD GPUs with rusticl
-- [v3.7](https://github.com/ProjectPhysX/FluidX3D/releases/tag/v3.7) (14.05.2026) [changes](https://github.com/ProjectPhysX/FluidX3D/compare/v3.6...v3.7) (faster Q-criterion rendering)
-  - up to 2x faster Q-criterion isosurface rendering on some GPUs
-  - reduced assembly spaghettification by simpler condition for VR rendering and disabling loop unrolling in rasterization
-  - micro-optimization in `convert_triangle/_interpolated()`
-  - fixed empty kernel name and workgroup size error printout in OpenCL-Wrapper
 
 </details>
 
@@ -541,7 +527,7 @@ config:
         [id$="AMD"] { fill: #ED1C24; stroke: #ED1C24 }
         [id$="Intel"] { fill: #0071C5; stroke: #0071C5 }
         [id$="Nvidia"] { fill: #76B900; stroke: #76B900 }
-        [id$="Apple"] { fill: #DFDFDF; stroke: #DFDFDF }
+        [id$="Apple"] { fill: #EFEFEF; stroke: #EFEFEF }
         [id$="ARM"] { fill: #886CE4; stroke: #886CE4 }
         [id$="Glenfly"] { fill: #FFF100; stroke: #FFF100 }
         [id$="AMDCPU"] { fill: #ED1C24; stroke: #ED1C24 }
@@ -588,8 +574,6 @@ section B200 SXM6 180GB
 	55609 :Nvidia, 0, 55609
 section H200 SXM5 141GB
 	36610 :Nvidia, 0, 36610
-section H200 NVL
-	34387 :Nvidia, 0, 34387
 section GH200 94GB GPU
 	34689 :Nvidia, 0, 34689
 section H100 NVL
@@ -639,8 +623,6 @@ section RX 9070 XT
 	6688 :AMD, 0, 6688
 section RX 9070
 	6019 :AMD, 0, 6019
-section RX 9060 XT
-	4362 :AMD, 0, 4362
 section RX 7900 XTX
 	7716 :AMD, 0, 7716
 section PRO W7900
@@ -663,14 +645,10 @@ section PRO W7600
 	2287 :AMD, 0, 2287
 section PRO W7500
 	1682 :AMD, 0, 1682
-section RX 6950 XT
-	4326 :AMD, 0, 4326
 section RX 6900 XT
 	4227 :AMD, 0, 4227
 section RX 6800 XT
 	4241 :AMD, 0, 4241
-section RX 6800
-	4355 :AMD, 0, 4355
 section PRO W6800
 	3361 :AMD, 0, 3361
 section RX 6700 XT
@@ -699,8 +677,6 @@ section RX 580 4GB
 	1848 :AMD, 0, 1848
 section RX 580 2048SP 8GB
 	1622 :AMD, 0, 1622
-section RX 570 4GB
-	1814 :AMD, 0, 1814
 section RX 480 8GB
 	1908 :AMD, 0, 1908
 section Pro WX 5100
@@ -715,10 +691,6 @@ section R9 290X
 	1699 :AMD, 0, 1699
 section R9 290
 	1647 :AMD, 0, 1647
-section R9 285
-	1409 :AMD, 0, 1409
-section HD 7790 2GB
-	661 :AMD, 0, 661
 section HD 7970
 	1563 :AMD, 0, 1563
 section HD 7870
@@ -735,8 +707,6 @@ section HD 5770
 	132 :AMD, 0, 132
 section FirePro V5800
 	108 :AMD, 0, 108
-section Arc Pro B70
-	6750 :Intel, 0, 6750
 section Arc Pro B60
 	5138 :Intel, 0, 5138
 section Arc B580 LE
@@ -755,8 +725,6 @@ section Arc Pro A40
 	985 :Intel, 0, 985
 section Arc A380
 	1115 :Intel, 0, 1115
-section Iris Xe MAX
-	415 :Intel, 0, 415
 section RTX PRO 6000 Blackwell
 	20841 :Nvidia, 0, 20841
 section RTX 5090
@@ -945,11 +913,9 @@ section NVS 290
 	9 :Nvidia, 0, 9
 section Arise 1020
 	6 :Glenfly, 0, 6
-
+	
 section M5 (10-CU, 32GB)
 	1613 :Apple, 0, 1613
-section M3 Ultra (60-CU, 96GB)
-	8174 :Apple, 0, 8174
 section M2 Ultra (76-CU, 192GB)
 	8769 :Apple, 0, 8769
 section M2 Max (38-CU, 32GB)
@@ -974,9 +940,7 @@ section Vega 8 (4750G)
 	511 :AMD, 0, 511
 section Vega 8 (3500U)
 	288 :AMD, 0, 288
-section Arc B390 (Ultra X7 358H)
-	1512 :Intel, 0, 1512
-section Arc 140V (Ultra 7 258V)
+section Arc 140V GPU (16GB)
 	1282 :Intel, 0, 1282
 section Graphics (Ultra 9 285K)
 	691 :Intel, 0, 691
@@ -1007,8 +971,6 @@ section 2x EPYC 9754
 	5179 :AMDCPU, 0, 5179
 section 2x EPYC 9654
 	4092 :AMDCPU, 0, 4092
-section 2x EPYC 9555
-	3123 :AMDCPU, 0, 3123
 section 2x EPYC 9554
 	2552 :AMDCPU, 0, 2552
 section 1x EPYC 9124
@@ -1083,14 +1045,12 @@ section w9-3595X
 	1393 :IntelCPU, 0, 1393
 section w7-3445
 	1173 :IntelCPU, 0, 1173
-section Ultra X7 358H
-	544 :IntelCPU, 0, 544
+section Ultra 9 285K
+	620 :IntelCPU, 0, 620
 section Ultra 7 258V
 	287 :IntelCPU, 0, 287
 section Ultra 9 185H
 	317 :IntelCPU, 0, 317
-section Ultra 9 285K
-	620 :IntelCPU, 0, 620
 section i9-14900K
 	490 :IntelCPU, 0, 490
 section i7-13700K
@@ -1117,8 +1077,6 @@ section E3-1240 v5
 	141 :IntelCPU, 0, 141
 section i5-5300U
 	37 :IntelCPU, 0, 37
-section i7-4771
-	100 :IntelCPU, 0, 100
 section i7-4770
 	104 :IntelCPU, 0, 104
 section i7-4720HQ
@@ -1146,7 +1104,6 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 | 🟢&nbsp;B300&nbsp;SXM6&nbsp;AC                   |              76.99 |         274 |         8000 |       42519&nbsp;(81%) |        57279&nbsp;(55%) |        23191&nbsp;(22%) |
 | 🟢&nbsp;B200&nbsp;SXM6&nbsp;180GB                |              74.45 |         182 |         8000 |       42152&nbsp;(81%) |        55609&nbsp;(54%) |        22695&nbsp;(22%) |
 | 🟢&nbsp;H200&nbsp;SXM5&nbsp;141GB                |              66.91 |         141 |         4800 |       23056&nbsp;(73%) |        36610&nbsp;(59%) |        20291&nbsp;(33%) |
-| 🟢&nbsp;H200&nbsp;NVL                            |              60.32 |         141 |         4800 |       21703&nbsp;(69%) |        34387&nbsp;(55%) |        18221&nbsp;(29%) |
 | 🟢&nbsp;GH200&nbsp;94GB&nbsp;GPU                 |              66.91 |          94 |         4000 |       20595&nbsp;(79%) |        34689&nbsp;(67%) |        19407&nbsp;(37%) |
 | 🟢&nbsp;H100&nbsp;NVL                            |              60.32 |          94 |         3938 |       20303&nbsp;(79%) |        32922&nbsp;(64%) |        18424&nbsp;(36%) |
 | 🟢&nbsp;H100&nbsp;SXM5&nbsp;80GB&nbsp;HBM3       |              66.91 |          80 |         3350 |       17602&nbsp;(80%) |        29561&nbsp;(68%) |        20227&nbsp;(46%) |
@@ -1172,7 +1129,6 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 | 🔴&nbsp;Radeon&nbsp;AI&nbsp;PRO&nbsp;R9700       |              47.84 |          32 |          640 |             3176 (76%) |              6198 (75%) |              6395 (77%) |
 | 🔴&nbsp;Radeon&nbsp;RX&nbsp;9070&nbsp;XT         |              48.66 |          16 |          640 |             3089 (74%) |              6688 (80%) |              6090 (73%) |
 | 🔴&nbsp;Radeon&nbsp;RX&nbsp;9070                 |              36.13 |          16 |          640 |             3007 (72%) |              5746 (69%) |              6019 (72%) |
-| 🔴&nbsp;Radeon&nbsp;RX&nbsp;9060&nbsp;XT         |              22.77 |          16 |          320 |             1504 (72%) |              3255 (78%) |              3685 (89%) |
 | 🔴&nbsp;Radeon&nbsp;RX&nbsp;7900&nbsp;XTX        |              61.44 |          24 |          960 |             3665 (58%) |              7644 (61%) |              7716 (62%) |
 | 🔴&nbsp;Radeon&nbsp;PRO&nbsp;W7900               |              61.30 |          48 |          864 |             3107 (55%) |              5939 (53%) |              5780 (52%) |
 | 🔴&nbsp;Radeon&nbsp;RX&nbsp;7900&nbsp;XT         |              51.61 |          20 |          800 |             3013 (58%) |              5856 (56%) |              5986 (58%) |
@@ -1184,10 +1140,8 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 | 🔴&nbsp;Radeon&nbsp;RX&nbsp;7600                 |              21.75 |           8 |          288 |             1250 (66%) |              2561 (68%) |              2512 (67%) |
 | 🔴&nbsp;Radeon&nbsp;PRO&nbsp;W7600               |              20.00 |           8 |          288 |             1179 (63%) |              2263 (61%) |              2287 (61%) |
 | 🔴&nbsp;Radeon&nbsp;PRO&nbsp;W7500               |              12.20 |           8 |          172 |              856 (76%) |              1630 (73%) |              1682 (75%) |
-| 🔴&nbsp;Radeon&nbsp;RX&nbsp;6950&nbsp;XT         |              27.85 |          16 |          576 |             2130 (57%) |              4280 (57%) |              4362 (58%) |
 | 🔴&nbsp;Radeon&nbsp;RX&nbsp;6900&nbsp;XT         |              23.04 |          16 |          512 |             1968 (59%) |              4227 (64%) |              4207 (63%) |
 | 🔴&nbsp;Radeon&nbsp;RX&nbsp;6800&nbsp;XT         |              20.74 |          16 |          512 |             2008 (60%) |              4241 (64%) |              4224 (64%) |
-| 🔴&nbsp;Radeon&nbsp;RX&nbsp;6800                 |              19.01 |          16 |          512 |             2027 (61%) |              4355 (65%) |              4311 (65%) |
 | 🔴&nbsp;Radeon&nbsp;PRO&nbsp;W6800               |              17.83 |          32 |          512 |             1620 (48%) |              3361 (51%) |              3180 (48%) |
 | 🔴&nbsp;Radeon&nbsp;RX&nbsp;6700&nbsp;XT         |              13.21 |          12 |          384 |             1408 (56%) |              2883 (58%) |              2908 (58%) |
 | 🔴&nbsp;Radeon&nbsp;RX&nbsp;6750&nbsp;GRE&nbsp;12GB |           12.49 |          12 |          384 |             1298 (52%) |              2840 (57%) |              2848 (57%) |
@@ -1202,7 +1156,6 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 | 🔴&nbsp;Radeon&nbsp;RX&nbsp;590                  |               5.53 |           8 |          256 |             1257 (75%) |              1573 (47%) |              1688 (51%) |
 | 🔴&nbsp;Radeon&nbsp;RX&nbsp;580&nbsp;4GB         |               6.50 |           4 |          256 |              946 (57%) |              1848 (56%) |              1577 (47%) |
 | 🔴&nbsp;Radeon&nbsp;RX&nbsp;580&nbsp;2048SP&nbsp;8GB |           4.94 |           8 |          224 |              868 (59%) |              1622 (56%) |              1240 (43%) |
-| 🔴&nbsp;Radeon&nbsp;RX&nbsp;570&nbsp;4GB         |               5.10 |           4 |          224 |             2021 (70%) |              1814 (62%) |              1430 (49%) |
 | 🔴&nbsp;Radeon&nbsp;RX&nbsp;480&nbsp;8GB         |               5.83 |           8 |          256 |             1104 (66%) |              1908 (57%) |              1550 (47%) |
 | 🔴&nbsp;Radeon&nbsp;Pro&nbsp;WX&nbsp;5100        |               3.89 |           8 |          160 |              951 (91%) |              1604 (77%) |               927 (45%) |
 | 🔴&nbsp;Radeon&nbsp;R9&nbsp;Fury&nbsp;X          |               8.60 |           4 |          512 |             1628 (49%) |              2880 (43%) |              2507 (38%) |
@@ -1210,8 +1163,6 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 | 🔴&nbsp;Radeon&nbsp;R9&nbsp;390X                 |               5.91 |           8 |          384 |             1733 (69%) |              2217 (44%) |              1722 (35%) |
 | 🔴&nbsp;Radeon&nbsp;R9&nbsp;290X                 |               5.63 |           4 |          320 |             1245 (60%) |              1699 (41%) |              1387 (33%) |
 | 🔴&nbsp;Radeon&nbsp;R9&nbsp;290                  |               4.85 |           4 |          320 |             1136 (54%) |              1647 (40%) |              1272 (31%) |
-| 🔴&nbsp;Radeon&nbsp;R9&nbsp;285                  |               3.29 |           2 |          176 |              782 (68%) |              1409 (62%) |               992 (43%) |
-| 🔴&nbsp;Radeon&nbsp;HD&nbsp;7790&nbsp;2GB        |               1.88 |           2 |          102 |              395 (59%) |               661 (50%) |               562 (42%) |
 | 🔴&nbsp;Radeon&nbsp;HD&nbsp;7970                 |               3.79 |           3 |          264 |              193 (11%) |              1270 (37%) |              1563 (46%) |
 | 🔴&nbsp;Radeon&nbsp;HD&nbsp;7870                 |               2.56 |           2 |          154 |              105 (10%) |               716 (36%) |               868 (44%) |
 | 🔴&nbsp;Radeon&nbsp;HD&nbsp;7850                 |               1.84 |           2 |          154 |              112 (11%) |               120 ( 6%) |               635 (32%) |
@@ -1220,7 +1171,6 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 | 🔴&nbsp;Radeon&nbsp;HD&nbsp;5870                 |               2.72 |           1 |          154 |              257 (26%) |               111 ( 6%) |               141 ( 7%) |
 | 🔴&nbsp;Radeon&nbsp;HD&nbsp;5770                 |               1.36 |           1 |           77 |              132 (26%) |                63 ( 6%) |                82 ( 8%) |
 | 🔴&nbsp;FirePro&nbsp;V5800                       |               1.10 |           1 |           64 |              108 (26%) |                52 ( 6%) |                66 ( 8%) |
-| 🔵&nbsp;Arc&nbsp;Pro&nbsp;B70                    |              22.63 |          32 |          608 |             3366 (85%) |              6750 (85%) |              5083 (77%) |
 | 🔵&nbsp;Arc&nbsp;Pro&nbsp;B60                    |              12.29 |          24 |          456 |             2540 (85%) |              5138 (87%) |              4650 (79%) |
 | 🔵&nbsp;Arc&nbsp;B580&nbsp;LE                    |              14.59 |          12 |          456 |             2549 (86%) |              5153 (87%) |              4879 (82%) |
 | 🔵&nbsp;Arc&nbsp;B570                            |              12.67 |          10 |          380 |             2078 (84%) |              4186 (85%) |              4158 (84%) |
@@ -1230,7 +1180,6 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 | 🔵&nbsp;Arc&nbsp;A580                            |              12.29 |           8 |          512 |             2534 (76%) |              3889 (58%) |              3488 (52%) |
 | 🔵&nbsp;Arc&nbsp;Pro&nbsp;A40                    |               5.02 |           6 |          192 |              594 (47%) |               985 (40%) |               927 (37%) |
 | 🔵&nbsp;Arc&nbsp;A380                            |               4.20 |           6 |          186 |              622 (51%) |              1097 (45%) |              1115 (46%) |
-| 🔵&nbsp;Iris&nbsp;Xe&nbsp;MAX                    |               2.07 |           4 |           68 |              248 (56%) |               415 (47%) |               395 (45%) |
 | 🟢&nbsp;RTX&nbsp;PRO&nbsp;6000&nbsp;Blackwell    |             125.95 |          96 |         1792 |            10349 (88%) |             20511 (88%) |             20841 (90%) |
 | 🟢&nbsp;GeForce&nbsp;RTX&nbsp;5090               |             104.88 |          32 |         1792 |             9522 (81%) |             18459 (79%) |             19141 (82%) |
 | 🟢&nbsp;GeForce&nbsp;RTX&nbsp;5080               |              56.34 |          16 |          960 |             5174 (82%) |             10252 (82%) |             10304 (83%) |
@@ -1327,7 +1276,6 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 | 🟡&nbsp;Arise&nbsp;1020                          |               1.50 |           2 |           19 |                6 ( 5%) |                 6 ( 2%) |                 6 ( 2%) |
 |                                                  |                    |             |              |                        |                         |                         |
 | ⚪&nbsp;M5&nbsp;GPU&nbsp;10CU&nbsp;32GB          |               2.56 |          18 |          153 |              800 (80%) |              1596 (80%) |              1613 (81%) |
-| ⚪&nbsp;M3&nbsp;Ultra&nbsp;GPU&nbsp;60CU&nbsp;99GB |            15.36 |          79 |          819 |             4438 (83%) |              8174 (77%) |              8086 (76%) |
 | ⚪&nbsp;M2&nbsp;Ultra&nbsp;GPU&nbsp;76CU&nbsp;192GB |           19.46 |         147 |          800 |             4629 (89%) |              8769 (84%) |              7972 (77%) |
 | ⚪&nbsp;M2&nbsp;Max&nbsp;GPU&nbsp;38CU&nbsp;32GB |               9.73 |          22 |          400 |             2405 (92%) |              4641 (89%) |              2444 (47%) |
 | ⚪&nbsp;M2&nbsp;Pro&nbsp;GPU&nbsp;19CU&nbsp;16GB |               4.86 |          11 |          200 |             1195 (91%) |              2374 (91%) |              2173 (84%) |
@@ -1340,8 +1288,7 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 | 🔴&nbsp;Radeon&nbsp;Graphics&nbsp;(7800X3D)      |               0.56 |          12 |          102 |              338 (51%) |               498 (37%) |               283 (21%) |
 | 🔴&nbsp;Radeon&nbsp;Vega&nbsp;8&nbsp;(4750G)     |               2.15 |          27 |           57 |              263 (71%) |               511 (70%) |               501 (68%) |
 | 🔴&nbsp;Radeon&nbsp;Vega&nbsp;8&nbsp;(3500U)     |               1.23 |           7 |           38 |              157 (63%) |               282 (57%) |               288 (58%) |
-| 🔵&nbsp;Arc&nbsp;B390&nbsp;(Ultra&nbsp;X7&nbsp;358H) |           7.68 |          26 |          137 |              807 (80%) |              1512 (76%) |              1340 (67%) |
-| 🔵&nbsp;Arc&nbsp;140V&nbsp;(Ultra&nbsp;7&nbsp;258V) |            3.99 |          26 |          137 |              636 (71%) |              1282 (72%) |               773 (44%) |
+| 🔵&nbsp;Arc&nbsp;140V&nbsp;GPU&nbsp;(16GB)       |               3.99 |          16 |          137 |              636 (71%) |              1282 (72%) |               773 (44%) |
 | 🔵&nbsp;Graphics&nbsp;(Ultra&nbsp;9&nbsp;285K)   |               2.05 |          25 |           90 |              393 (67%) |               691 (59%) |               442 (38%) |
 | 🔵&nbsp;Arc&nbsp;Graphics&nbsp;(Ultra&nbsp;9&nbsp;185H) |        4.81 |          14 |           90 |              271 (46%) |               710 (61%) |               724 (62%) |
 | 🔵&nbsp;Iris&nbsp;Xe&nbsp;Graphics&nbsp;(i7-1265U) |             1.92 |          13 |           77 |              342 (68%) |               621 (62%) |               574 (58%) |
@@ -1357,7 +1304,6 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 |                                                  |                    |             |              |                        |                         |                         |
 | 🔴&nbsp;2x&nbsp;EPYC&nbsp;9754                   |              50.79 |        3072 |          922 |             3276 (54%) |              5077 (42%) |              5179 (43%) |
 | 🔴&nbsp;2x&nbsp;EPYC&nbsp;9654                   |              43.62 |        1536 |          922 |             3087 (51%) |              3675 (31%) |              4092 (34%) |
-| 🔴&nbsp;2x&nbsp;EPYC&nbsp;9555                   |              34.41 |        2304 |         1229 |             3123 (39%) |              2054 (13%) |              2027 (13%) |
 | 🔴&nbsp;2x&nbsp;EPYC&nbsp;9554                   |              30.72 |         384 |          922 |             2552 (42%) |              2127 (18%) |              2144 (18%) |
 | 🔴&nbsp;1x&nbsp;EPYC&nbsp;9124                   |               3.69 |         128 |          307 |              772 (38%) |               579 (15%) |               586 (15%) |
 | 🔴&nbsp;2x&nbsp;EPYC&nbsp;7713                   |               8.19 |         512 |          410 |             1298 (48%) |               492 ( 9%) |              1418 (27%) |
@@ -1395,10 +1341,9 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 | 🔴&nbsp;Athlon&nbsp;X2&nbsp;QL-65                |               0.03 |           4 |           11 |                3 ( 4%) |                 2 ( 2%) |                 3 ( 2%) |
 | 🔵&nbsp;Xeon&nbsp;w9-3595X                       |              15.36 |         256 |          307 |             1304 (65%) |              1179 (30%) |              1393 (35%) |
 | 🔵&nbsp;Xeon&nbsp;w7-3445                        |               6.66 |         256 |          307 |             1173 (58%) |               518 (13%) |               613 (15%) |
-| 🔵&nbsp;Core&nbsp;Ultra&nbsp;X7&nbsp;358H        |               1.93 |          32 |          154 |              544 (54%) |               190 (10%) |               323 (16%) |
+| 🔵&nbsp;Core&nbsp;Ultra&nbsp;9&nbsp;285K         |               3.76 |          48 |           90 |              340 (58%) |               376 (32%) |               620 (53%) |
 | 🔵&nbsp;Core&nbsp;Ultra&nbsp;7&nbsp;258V         |               0.56 |          32 |          137 |              287 (32%) |               123 ( 7%) |               167 ( 9%) |
 | 🔵&nbsp;Core&nbsp;Ultra&nbsp;9&nbsp;185H         |               1.79 |          16 |           90 |              317 (54%) |               267 (23%) |               288 (25%) |
-| 🔵&nbsp;Core&nbsp;Ultra&nbsp;9&nbsp;285K         |               3.76 |          48 |           90 |              340 (58%) |               376 (32%) |               620 (53%) |
 | 🔵&nbsp;Core&nbsp;i9-14900K                      |               3.74 |          32 |           96 |              443 (71%) |               453 (36%) |               490 (39%) |
 | 🔵&nbsp;Core&nbsp;i7-13700K                      |               2.51 |          64 |           90 |              504 (86%) |               398 (34%) |               424 (36%) |
 | 🔵&nbsp;Core&nbsp;i7-1265U                       |               1.23 |          32 |           77 |              128 (26%) |                62 ( 6%) |                58 ( 6%) |
@@ -1411,7 +1356,6 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 | 🔵&nbsp;Xeon&nbsp;E-2176G                        |               0.71 |          64 |           42 |              201 (74%) |               136 (25%) |               148 (27%) |
 | 🔵&nbsp;Core&nbsp;i7-7700HQ                      |               0.36 |          12 |           38 |               81 (32%) |                82 (16%) |               108 (22%) |
 | 🔵&nbsp;Xeon&nbsp;E3-1240&nbsp;v5                |               0.50 |          32 |           34 |              141 (63%) |                75 (17%) |                88 (20%) |
-| 🔵&nbsp;Core&nbsp;i7-4771                        |               0.45 |          24 |           26 |              100 (60%) |                22 ( 7%) |                74 (22%) |
 | 🔵&nbsp;Core&nbsp;i7-4770                        |               0.44 |          16 |           26 |              104 (62%) |                69 (21%) |                59 (18%) |
 | 🔵&nbsp;Core&nbsp;i7-4720HQ                      |               0.33 |          16 |           26 |               80 (48%) |                23 ( 7%) |                60 (18%) |
 | 🔵&nbsp;Celeron&nbsp;N2807                       |               0.01 |           4 |           11 |                7 (10%) |                 3 ( 2%) |                 3 ( 2%) |
@@ -1439,7 +1383,7 @@ config:
         [id$="AMD"] { fill: #ED1C24; stroke: #ED1C24 }
         [id$="Intel"] { fill: #0071C5; stroke: #0071C5 }
         [id$="Nvidia"] { fill: #76B900; stroke: #76B900 }
-        [id$="Apple"] { fill: #DFDFDF; stroke: #DFDFDF }
+        [id$="Apple"] { fill: #EFEFEF; stroke: #EFEFEF }
         [id$="ARM"] { fill: #886CE4; stroke: #886CE4 }
         [id$="Glenfly"] { fill: #FFF100; stroke: #FFF100 }
         [id$="AMDCPU"] { fill: #ED1C24; stroke: #ED1C24 }
@@ -1574,13 +1518,6 @@ section 2x H200 SXM5 141GB
 section 1x H200 SXM5 141GB
 	36610 :Nvidia, 0, 36610
 
-section 4x H200 NVL
-	100925 :Nvidia, 0, 100925
-section 2x H200 NVL
-	58655 :Nvidia, 0, 58655
-section 1x H200 NVL
-	34387 :Nvidia, 0, 34387
-
 section 4x H100 NVL
 	82122 :Nvidia, 0, 82122
 section 2x H100 NVL
@@ -1636,11 +1573,6 @@ section 1x Tesla K80 (2 GPUs)
 	3448 :Nvidia, 0, 3448
 section 1x Tesla K80 (1 GPU)
 	1642 :Nvidia, 0, 1642
-
-section 6x RX 7900 XTX
-	42954 :AMD, 0, 42954
-section 1x RX 7900 XTX
-	7716 :AMD, 0, 7716
 
 section 2x L40S
 	13640 :Nvidia, 0, 13640
@@ -1781,10 +1713,6 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 | 🟢&nbsp;2x&nbsp;H200&nbsp;SXM5&nbsp;141GB                       |             133.82 |         282 |         9600 |      36711&nbsp;(1.6x) |            57070 (1.6x) |            34871 (1.7x) |
 | 🟢&nbsp;1x&nbsp;H200&nbsp;SXM5&nbsp;141GB                       |              66.91 |         141 |         4800 |       23056&nbsp;(73%) |             36610 (59%) |             20291 (33%) |
 |                                                                 |                    |             |              |                        |                         |                         |
-| 🟢&nbsp;4x&nbsp;H200&nbsp;NVL                                   |             241.28 |         564 |        19200 |      63517&nbsp;(2.9x) |      100925&nbsp;(2.9x) |       62245&nbsp;(3.4x) |
-| 🟢&nbsp;2x&nbsp;H200&nbsp;NVL                                   |             120.64 |         282 |         9600 |      36836&nbsp;(1.7x) |       58655&nbsp;(1.7x) |       32614&nbsp;(1.8x) |
-| 🟢&nbsp;1x&nbsp;H200&nbsp;NVL                                   |              60.32 |         141 |         4800 |       21703&nbsp;(69%) |        34387&nbsp;(55%) |        18221&nbsp;(29%) |
-|                                                                 |                    |             |              |                        |                         |                         |
 | 🟢&nbsp;4x&nbsp;H100&nbsp;NVL                                   |             241.28 |         376 |        15752 |      44284&nbsp;(2.2x) |            82122 (2.5x) |            53855 (2.9x) |
 | 🟢&nbsp;2x&nbsp;H100&nbsp;NVL                                   |             120.64 |         188 |         7876 |      29050&nbsp;(1.4x) |            49958 (1.5x) |            30586 (1.7x) |
 | 🟢&nbsp;1x&nbsp;H100&nbsp;NVL                                   |              60.32 |          94 |         3938 |       20303&nbsp;(79%) |             32922 (64%) |             18424 (36%) |
@@ -1816,9 +1744,6 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 |                                                                 |                    |             |              |                        |                         |                         |
 | 🟢&nbsp;1x&nbsp;Tesla&nbsp;K80&nbsp;(2&nbsp;GPUs)               |               8.22 |          24 |          480 |            2086 (2.3x) |             3448 (2.1x) |             2174 (2.3x) |
 | 🟢&nbsp;1x&nbsp;Tesla&nbsp;K80&nbsp;(1&nbsp;GPU)                |               4.11 |          12 |          240 |              916 (58%) |              1642 (53%) |               943 (30%) |
-|                                                                 |                    |             |              |                        |                         |                         |
-| 🔴&nbsp;6x&nbsp;Radeon&nbsp;RX&nbsp;7900&nbsp;XTX              |             368.64 |         144 |         5760 |      20835&nbsp;(5.7x) |       42954&nbsp;(5.6x) |       41304&nbsp;(5.4x) |
-| 🔴&nbsp;1x&nbsp;Radeon&nbsp;RX&nbsp;7900&nbsp;XTX              |              61.44 |          24 |          960 |             3665 (58%) |              7644 (61%) |              7716 (62%) |
 |                                                                 |                    |             |              |                        |                         |                         |
 | 🟢&nbsp;2x&nbsp;L40S                                            |             183.22 |          96 |         1728 |            6888 (1.8x) |            13099 (1.8x) |            13640 (1.8x) |
 | 🟢&nbsp;1x&nbsp;L40S                                            |              91.61 |          48 |          864 |             3824 (68%) |              7463 (67%) |              7669 (68%) |
@@ -1883,25 +1808,25 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 
 - <details><summary>What physical model does FluidX3D use?</summary><br>FluidX3D implements the <a href="https://doi.org/10.15495/EPub_UBT_00005400">lattice Boltzmann method</a>, a type of direct numerical simulation (DNS), the most accurate type of fluid simulation, but also the most computationally challenging. Optional extension models implemented in FluidX3D include volume force (Guo forcing), free surface (<a href="https://doi.org/10.3390/computation10060092">volume-of-fluid</a> and <a href="https://doi.org/10.3390/computation10020021">PLIC</a>), a temperature model and Smagorinsky-Lilly subgrid turbulence model for DNS-LES simulations.<br><br></details>
 
-- <details><summary>What boundary types are available in FluidX3D?</summary><br>Periodic boundaries, solid boundaries, equilibrium boundaries, and moving solid boundaries.<br>See the <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#initial-and-boundary-conditions">section on initial/boundary conditions</a> in the FluidX3D Documentation!<br><br></details>
+- <details><summary>What boundary types are available in FluidX3D?</summary><br>Periodic boundaries, solid boundaries, equilibrium boundaries, and moving solid boundaries.<br>See <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#initial-and-boundary-conditions">the relevant section in the FluidX3D Documentation</a>!<br><br></details>
 
 - <details><summary>Does FluidX3D support adaptive mesh refinement?</summary><br>No, not yet. Grid cell size is the same everywhere in the simulation box.<br><br></details>
 
 - <details><summary>Can FluidX3D model both water and air at the same time?</summary><br>No. FluidX3D can model either water or air, but not both at the same time. For free surface simulations with the <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#surface-extension">SURFACE extension</a>, I went with a <a href="https://doi.org/10.3390/computation10060092">volume-of-fluid</a>/<a href="https://doi.org/10.3390/computation10020021">PLIC</a> modeling approach as that provides a sharp water-air interface, so individual droplets can be resolved as small as 3 grid cells in diameter. However this model ignores the gas phase completely, and only models the fluid phase with LBM as well as the surface tension. An alternative I had explored years ago was the <a href="http://dx.doi.org/10.1016/j.jcp.2022.111753">phase-field models</a> (simplest of them is Shan-Chen model) - they model both fluid and gas phases, but struggle with the 1:1000 density contrast of air:water, and the modeled interface is diffuse over ~5 grid cells. So the smallest resolved droplets are ~10 grid cells in diameter, meaning for the same resolution you need ~37x the memory footprint - infeasible on GPUs. Coming back to VoF model, it is possible to <a href="http://dx.doi.org/10.1186/s43591-023-00053-7">extend it with a model for the gas phase</a>, but one has to manually track bubble split/merge events, which makes this approach very painful in implementation and poorly performing on the hardware.<br><br></details>
 
-- <details><summary>Can FluidX3D compute lift/drag forces?</summary><br>Yes. See the <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#liftdrag-forces">lift/drag forces section</a> in the FluidX3D Documentation!<br><br></details>
+- <details><summary>Can FluidX3D compute lift/drag forces?</summary><br>Yes. See <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#liftdrag-forces">the relevant section in the FluidX3D Documentation</a>!<br><br></details>
 
 - <details><summary>Can FluidX3D simulate transsonic/supersonic flows?</summary><br>No. The LBM model in FluidX3D works only in the weakly compressible regime at Mach numbers < 0.3.<br><br></details>
 
-- <details><summary>How to simulate moving/rotating geometry?</summary><br>See the <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#loading-stl-files">section about .stl voxelization</a> in the FluidX3D Documentation.<br><br></details>
+- <details><summary>How to simulate moving/rotating geometry?</summary><br>See <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#loading-stl-files">the section about .stl voxelization in FluidX3D Documentation</a>.<br><br></details>
 
-- <details><summary>Can FluidX3D model thermal convection?</summary><br>Yes. See the <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#temperature-extension">TEMPERATURE extension section</a> in the FluidX3D Documentation!<br><br></details>
+- <details><summary>Can FluidX3D model thermal convection?</summary><br>Yes. See <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#temperature-extension">the relevant section in the FluidX3D Documentation</a>!<br><br></details>
 
 - <details><summary>Can FluidX3D model chemical reactions?</summary><br>No.<br><br></details>
 
-- <details><summary>Can FluidX3D model particles?</summary><br>Yes, either as passive tracer particles or with 2-way coupling (buoyancy). See the <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#particles-extension">PARTICLES extension section</a> in the FluidX3D Documentation!<br><br></details>
+- <details><summary>Can FluidX3D model particles?</summary><br>Yes, either as passive tracer particles or with 2-way coupling (buoyancy). See <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#particles-extension">the relevant section in the FluidX3D Documentation</a>!<br><br></details>
 
-- <details><summary>I see white lines or everything disappeared. Why?</summary><br>This indicates that the simulation has become unstable. See the <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#7-suitable-parameters-and-simulation-instability">the section on parametrization and instability</a> in the FluidX3D Documentation!<br><br></details>
+- <details><summary>I see white lines or everything disappeared. Why?</summary><br>This indicates that the simulation has become unstable. See <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#7-suitable-parameters-and-simulation-instability">the relevant section in the FluidX3D Documentation</a>!<br><br></details>
 
 - <details><summary>The density and/or velocity field are oscillatory. Why?</summary>
 
@@ -1913,7 +1838,7 @@ Colors: 🔴 AMD, 🔵 Intel, 🟢 Nvidia, ⚪ Apple, 🟣 ARM, 🟡 Glenfly
 
 ### Hardware
 
-- <details><summary>Can FluidX3D run on multiple GPUs at the same time?</summary><br>Yes. The simulation grid is then split in domains, one for each GPU (domain decomposition method). The GPUs essentially pool their memory, enabling much larger grid resolution and higher performance. Rendering is parallelized across multiple GPUs as well; each GPU renders its own domain with a 3D offset, then rendered frames from all GPUs are overlaid with their z-buffers. Communication between domains is done over PCIe, so no SLI/Crossfire/NVLink/InfinityFabric is required. All GPUs must however be installed in the same node (PC/laptop/server). Even <a href="https://youtu.be/_8Ed8ET9gBU">unholy combinations of AMD+Intel+Nvidia GPUs will work</a>, although it is recommended to only use GPUs with similar memory capacity and bandwidth together. Using a fast gaming GPU and slow integrated GPU together would only decrease performance due to communication overhead.<br><br></details>
+- <details><summary>Can FluidX3D run on multiple GPUs at the same time?</summary><br>Yes. The simulation grid is then split in domains, one for each GPU (domain decomposition method). The GPUs essentially pool their memory, enabling much larger grid resolution and higher performance. Rendering is parallelized across multiple GPUs as well; each GPU renders its own domain with a 3D offset, then rendered frames from all GPUs are overlayed with their z-buffers. Communication between domains is done over PCIe, so no SLI/Crossfire/NVLink/InfinityFabric is required. All GPUs must however be installed in the same node (PC/laptop/server). Even <a href="https://youtu.be/_8Ed8ET9gBU">unholy combinations of AMD+Intel+Nvidia GPUs will work</a>, although it is recommended to only use GPUs with similar memory capacity and bandwidth together. Using a fast gaming GPU and slow integrated GPU together would only decrease performance due to communication overhead.<br><br></details>
 
 - <details><summary>Can I run FluidX3D on the CPU?</summary><br>Yes, and this is especially useful when you need more memory than a GPU can offer. You only need to install the <a href="https://github.com/ProjectPhysX/FluidX3D/blob/master/DOCUMENTATION.md#0-install-gpu-drivers-and-opencl-runtime">Intel CPU Runtime for OpenCL</a>.<br><br></details>
 

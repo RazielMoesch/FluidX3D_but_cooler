@@ -34,7 +34,7 @@ string("'-----------------------------------------------------------------------
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y g++ git make ocl-icd-libopencl1 ocl-icd-opencl-dev
 mkdir -p ~/amdgpu
-wget -P ~/amdgpu https://repo.radeon.com/amdgpu-install/25.35.1/ubuntu/noble/amdgpu-install_7.2.1.70201-1_all.deb
+wget -P ~/amdgpu https://repo.radeon.com/amdgpu-install/30.20.1/ubuntu/noble/amdgpu-install_7.1.1.70101-1_all.deb
 sudo apt install -y ~/amdgpu/amdgpu-install*.deb
 sudo amdgpu-install -y --usecase=graphics,rocm,opencl --opencl=rocr
 sudo usermod -a -G render,video $(whoami)
@@ -60,12 +60,12 @@ sudo shutdown -r now
 | CPU Option 1: Intel CPU Runtime for OpenCL (works for both AMD/Intel CPUs)  |
 '-----------------------------------------------------------------------------'
 export OCLV="oclcpuexp-2025.21.10.0.10_160000_rel"
-export TBBV="oneapi-tbb-2023.0.0"
+export TBBV="oneapi-tbb-2022.3.0"
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y g++ git make ocl-icd-libopencl1 ocl-icd-opencl-dev
 sudo mkdir -p ~/cpurt /opt/intel/${OCLV} /etc/OpenCL/vendors /etc/ld.so.conf.d
 sudo wget -P ~/cpurt https://github.com/intel/llvm/releases/download/2025-WW45/${OCLV}.tar.gz
-sudo wget -P ~/cpurt https://github.com/uxlfoundation/oneTBB/releases/download/v2023.0.0/${TBBV}-lin.tgz
+sudo wget -P ~/cpurt https://github.com/uxlfoundation/oneTBB/releases/download/v2022.3.0/${TBBV}-lin.tgz
 sudo tar -zxvf ~/cpurt/${OCLV}.tar.gz -C /opt/intel/${OCLV}
 sudo tar -zxvf ~/cpurt/${TBBV}-lin.tgz -C /opt/intel
 echo /opt/intel/${OCLV}/x64/libintelocl.so | sudo tee /etc/OpenCL/vendors/intel_expcpu.icd
@@ -96,7 +96,6 @@ struct Device_Info {
 	uint memory_used = 0u; // track global memory usage in MB
 	uint global_cache=0u, local_cache=0u; // global cache in KB, local cache in KB
 	uint max_global_buffer=0u, max_constant_buffer=0u; // maximum global buffer size in MB, maximum constant buffer size in KB
-	uint max_workgroup_size=0u; // maximum workgroup size
 	uint compute_units = 0u; // compute units (CUs) can contain multiple cores depending on the microarchitecture
 	uint clock_frequency = 0u; // in MHz
 	bool is_cpu=false, is_gpu=false, uses_ram=false;
@@ -121,7 +120,6 @@ struct Device_Info {
 		local_cache = (uint)(cl_device.getInfo<CL_DEVICE_LOCAL_MEM_SIZE>()/1024ull); // local cache in KB
 		max_global_buffer = (uint)(min(cl_device.getInfo<CL_DEVICE_MAX_MEM_ALLOC_SIZE>()/1048576ull, (ulong)memory)); // maximum global buffer size in MB
 		max_constant_buffer = (uint)(cl_device.getInfo<CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE>()/1024ull); // maximum constant buffer size in KB
-		max_workgroup_size = (uint)cl_device.getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>(); // maximum workgroup size
 		compute_units = (uint)cl_device.getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>(); // compute units (CUs) can contain multiple cores depending on the microarchitecture
 		clock_frequency = (uint)cl_device.getInfo<CL_DEVICE_MAX_CLOCK_FREQUENCY>(); // in MHz
 		is_fp64_capable = (uint)cl_device.getInfo<CL_DEVICE_NATIVE_VECTOR_WIDTH_DOUBLE>()*(uint)contains(cl_device.getInfo<CL_DEVICE_EXTENSIONS>(), "cl_khr_fp64");
@@ -159,7 +157,7 @@ struct Device_Info {
 			if(is_gpu&&length(amd_device_name)>0u) name = amd_device_name; // for AMD GPUs, CL_DEVICE_NAME wrongly outputs chip codename, and CL_DEVICE_BOARD_NAME_AMD outputs actual device name
 		} else if(vendor_id==0x8086) { // Intel GPU/CPU
 			const uint intel_device_ip_version = (uint)cl_device.getInfo<CL_DEVICE_IP_VERSION_INTEL>()&0xFFFFC03Fu; // bits 22-31: major, bits 14-21: minor, bits 0-5: revision, https://github.com/openvinotoolkit/openvino/blob/master/src/plugins/intel_gpu/src/runtime/ocl/ocl_device.cpp#L150-L158
-			intel_compute_capability = 100000u*(intel_device_ip_version>>22)+100u*((intel_device_ip_version>>14)&0xFFu)+(intel_device_ip_version&0x3Fu); // for example 2000100 means compute capability 20.001.00, https://github.com/intel/compute-runtime/blob/master/third_party/aot_config_headers/platforms.h
+			intel_compute_capability = 100000u*(intel_device_ip_version>>22)+100u*((intel_device_ip_version>>14)&0xFFu)+(intel_device_ip_version&0x3Fu); // for example 2000100 means compute capability 20.001.00
 			const bool intel_16_cores_per_cu = (intel_compute_capability>=1206000u&&intel_compute_capability<1207000u)||(intel_compute_capability>=2000000u); // (PVC/Xe2/Xe3)
 			cores_per_cu = is_gpu ? (intel_16_cores_per_cu ? 16.0f : 8.0f) : 0.5f; // Intel GPUs have 16 cores/CU (PVC/Xe2/Xe3) or 8 cores/CU (Xe1), Intel CPUs (with HT) have 1/2 core/CU
 			if(is_gpu&&!uses_ram) { // fix wrong global memory capacity reporting for Intel dGPUs
@@ -177,7 +175,6 @@ struct Device_Info {
 			const bool nvidia_192_cores_per_cu = (nvidia_compute_capability>=30u&&nvidia_compute_capability< 50u); // identify Kepler GPUs
 			const bool nvidia__64_cores_per_cu = (nvidia_compute_capability>=70u&&nvidia_compute_capability<=80u)||nvidia_compute_capability==60u; // identify Volta, Turing, P100, A100, A30
 			cores_per_cu = is_gpu ? (nvidia__32_cores_per_cu ? 32.0f : nvidia_192_cores_per_cu ? 192.0f : nvidia__64_cores_per_cu ? 64.0f : 128.0f) : 1.0f; // 32 (Fermi), 192 (Kepler), 64 (Volta, Turing, P100, A100, A30), 128 (Maxwell, Pascal, Ampere, Hopper, Ada, Blackwell) or 1 (CPUs)
-			if(is_gpu) uses_ram = false; // CL_MEM_USE_HOST_PTR is broken on Nvidia iGPUs like GB10, so disable zero-copy there
 			patch_nvidia_fp16 = patch_nvidia_fp16||(nvidia_compute_capability>=60&&atof(driver_version.substr(0, 6).c_str())>=520.00); // enable for all Nvidia Pascal or newer GPUs with driver>=520.00
 			if(patch_nvidia_fp16) is_fp16_capable = 2u;
 			is_dp4a_capable = (uint)(nvidia_compute_capability>=61u); // Nvidia GPUs with nvidia_compute_capability>=61 don't report dp4a support through cl_khr_integer_dot_product extension, but support it via inline PTX assembly
@@ -619,14 +616,13 @@ private:
 	ulong N = 0ull; // kernel range
 	uint number_of_parameters = 0u;
 	string name = "";
-	const Device* device = nullptr;
 	cl::Kernel cl_kernel;
 	cl::NDRange cl_range_global, cl_range_local;
 	cl::CommandQueue cl_queue;
 	inline void check_for_errors(const int error) {
 		if(error==-48) print_error("There is no OpenCL kernel with name \""+name+"(...)\" in the OpenCL C code! Check spelling!");
 		if(error<-48&&error>-53) print_error("Parameters for OpenCL kernel \""+name+"(...)\" don't match between C++ and OpenCL C!");
-		if(error==-54) print_error("Workgrop size "+to_string((ulong)cl_range_local.get()[0])+" for OpenCL kernel \""+name+"(...)\" is invalid! Maximum supported workgroup size on "+device->info.name+" is "+to_string(device->info.max_workgroup_size)+".");
+		if(error==-54) print_error("Workgrop size "+to_string(WORKGROUP_SIZE)+" for OpenCL kernel \""+name+"(...)\" is invalid!");
 		if(error!=0) print_error("OpenCL kernel \""+name+"(...)\" failed with error code "+to_string(error)+"!");
 	}
 	template<typename T> inline void link_parameter(const uint position, const Memory<T>& memory) {
@@ -643,17 +639,20 @@ private:
 		link_parameters(starting_position+1u, parameters...);
 	}
 public:
-	template<class... T> inline Kernel(const Device& device, const ulong N, const uint workgroup_size, const string& name, const T&... parameters) { // accepts Memory<T> objects and fundamental data type constants
+	template<class... T> inline Kernel(const Device& device, const ulong N, const string& name, const T&... parameters) { // accepts Memory<T> objects and fundamental data type constants
 		if(!device.is_initialized()) print_error("No OpenCL Device selected. Call Device constructor.");
 		this->name = name;
-		this->device = &device;
+		cl_kernel = cl::Kernel(device.get_cl_program(), name.c_str());
+		link_parameters(0u, parameters...); // expand variadic template to link kernel parameters
+		set_ranges(N);
+		cl_queue = device.get_cl_queue();
+	}
+	template<class... T> inline Kernel(const Device& device, const ulong N, const uint workgroup_size, const string& name, const T&... parameters) { // accepts Memory<T> objects and fundamental data type constants
+		if(!device.is_initialized()) print_error("No OpenCL Device selected. Call Device constructor.");
 		cl_kernel = cl::Kernel(device.get_cl_program(), name.c_str());
 		link_parameters(0u, parameters...); // expand variadic template to link kernel parameters
 		set_ranges(N, (ulong)workgroup_size);
 		cl_queue = device.get_cl_queue();
-	}
-	template<class... T> inline Kernel(const Device& device, const ulong N, const string& name, const T&... parameters)
-		:Kernel(device, N, WORKGROUP_SIZE, name, parameters...) { // delegating constructor
 	}
 	inline Kernel() {} // default constructor
 	inline Kernel& set_ranges(const ulong N, const ulong workgroup_size=(ulong)WORKGROUP_SIZE) {

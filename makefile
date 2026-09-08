@@ -13,12 +13,10 @@ macOS: LDLIBS_OPENCL = -framework OpenCL
 Android: LDLIBS_OPENCL = -L/system/vendor/lib64 -lOpenCL
 
 Linux-X11: LDFLAGS_X11 = -I./src/X11/include
-macOS: LDFLAGS_X11 = -I/opt/X11/include
-Linux Android: LDFLAGS_X11 =
+Linux macOS Android: LDFLAGS_X11 =
 
 Linux-X11: LDLIBS_X11 = -L./src/X11/lib -lX11 -lXrandr
-macOS: LDLIBS_X11 = -L/opt/X11/lib -lX11 -lXrandr
-Linux Android: LDLIBS_X11 =
+Linux macOS Android: LDLIBS_X11 =
 
 Linux-X11 Linux macOS Android: bin/FluidX3D
 
