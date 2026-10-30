@@ -1,6 +1,6 @@
 
 
-
+/*
 #include "setup.hpp"
 #include <chrono>
 
@@ -42,6 +42,128 @@ void main_setup() { // glass box, water at 50% height, gravity direction switche
 		lbm.run(20u); // small chunks so the 5s check stays accurate without per-step overhead
 	}
 }
+*/
+
+
+
+
+/// MY OWN BOX TEST FOR FIRST PROJECT (THIS USES KEYS TO CONTROL GRAVITY DIRECTION)
+
+#include "setup.hpp"
+ void main_setup() { // cube with changing gravity; required extensions in defines.hpp: FP16S, VOLUME_FORCE, SURFACE, INTERACTIVE_GRAPHICS
+	// ################################################################## define simulation box size, viscosity and volume force ###################################################################
+	LBM lbm(80u, 80u, 80u, 0.02f, 0.0f, 0.0f, -0.001f, 0.001f);
+
+	// ###################################################################################### define geometry ######################################################################################
+	const uint Nx=lbm.get_Nx(), Ny=lbm.get_Ny(), Nz=lbm.get_Nz(); 
+	parallel_for(lbm.get_N(), [&](ulong n) { 
+		uint x=0u, y=0u, z=0u; 
+		lbm.coordinates(n, x, y, z);
+
+		if(x<Nx*2u/3u&&y<Ny*2u/3u) lbm.flags[n] = TYPE_F;
+
+		if(x==0u||x==Nx-1u||y==0u||y==Ny-1u||z==0u||z==Nz-1u) 
+		
+		lbm.flags[n] = TYPE_S;
+
+	}); 
+	// ####################################################################### run simulation, export images and data ##########################################################################
+	lbm.graphics.visualization_modes = lbm.get_D()== 1u ? VIS_PHI_RAYTRACE : VIS_PHI_RASTERIZE;
+
+	//lbm.graphics.visualization_modes = VIS_FLAG_LATTICE|VIS_STREAMLINES;
+	lbm.run(0u);
+    // Initial gravity force
+    float fx = 0.0f, fy = 0.0f, fz = -0.001f;
+    lbm.set_f(fx, fy, fz);
+
+    // Main loop
+    while (true) {
+        // User input: WASD changes direction
+        if (camera.get_key_state('W')) { fx = 0.0f; fy = +0.001f; fz = 0.0f; }  // move up
+        if (camera.get_key_state('S')) { fx = 0.0f; fy = -0.001f; fz = 0.0f; }  // move down
+        if (camera.get_key_state('A')) { fx = -0.001f; fy = 0.0f; fz = 0.0f; }  // move left
+        if (camera.get_key_state('D')) { fx = +0.001f; fy = 0.0f; fz = 0.0f; }  // move right
+        if (camera.get_key_state(' '))  { fx = 0.0f; fy = 0.0f; fz = 0.0f; }    // stop
+
+        // Apply the updated force vector
+        lbm.set_f(fx, fy, fz);
+
+
+        // Run the simulation for some iterations and render
+        lbm.run(5u);
+    }
+}
+ 
+
+/*
+
+// SECOND VERSION IMPLEMENT OF BOX CHNAGING GRAVITY BASED Of mouse MOVEMENT
+
+// ------------------------
+// Main setup
+// ------------------------
+#include "setup.hpp"
+void main_setup()
+{
+    // --------------------------
+    // Initialize LBM simulation
+    // --------------------------
+    LBM lbm(80u, 80u, 80u, 0.02f, 0.0f, 0.0f, -0.001f, 0.001f);
+    camera.lockmouse = true;
+
+    const uint Nx = lbm.get_Nx();
+    const uint Ny = lbm.get_Ny();
+    const uint Nz = lbm.get_Nz();
+
+    parallel_for(lbm.get_N(), [&](ulong n) {
+        uint x=0u, y=0u, z=0u;
+        lbm.coordinates(n,x,y,z);
+
+	if(x < Nx*5u/6u && y < Ny*5u/6u)            
+	lbm.flags[n] = TYPE_F;
+
+        if(x==0u || x==Nx-1u ||
+           y==0u || y==Ny-1u ||
+           z==0u || z==Nz-1u)
+            lbm.flags[n] = TYPE_S;
+    });
+
+    lbm.graphics.visualization_modes =
+        lbm.get_D()==1u ? VIS_PHI_RAYTRACE : VIS_PHI_RASTERIZE;
+
+    lbm.run(0u);
+
+    const float gravity_strength = 0.001f;
+    float yaw = 0.0f;
+    float pitch = 0.0f;
+
+
+    // --------------------------
+    // Main loop
+    // --------------------------
+    while(true)
+    {
+        // --- read cursor ---
+        POINT p;
+        GetCursorPos(&p);
+        int cx = camera.width / 2;
+        int cy = camera.height / 2;
+        yaw   += (cx - p.x) * 0.002f;
+        pitch += (cy - p.y) * 0.002f;
+        SetCursorPos(cx, cy);
+
+        // --- compute gravity ---
+        float gx = sin(yaw) * cos(pitch);
+        float gy = sin(pitch);
+        float gz = -cos(yaw) * cos(pitch);
+        lbm.set_f(gravity_strength*gx, gravity_strength*gy, gravity_strength*gz);
+
+        // --- run simulation ---
+        lbm.run(5u);
+    }
+}
+*/
+
 
 
 //#ifdef BENCHMARK

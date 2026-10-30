@@ -460,6 +460,13 @@ void key_bindings(const int key) {
 HWND window;
 HDC displayDC, memDC;
 HBITMAP frameDC;
+#ifdef BOX_VIEWPORT_6
+const uint box_monitor_count = 3u;
+HWND box_windows[box_monitor_count] = { nullptr };
+HDC box_displayDCs[box_monitor_count] = { nullptr };
+HDC box_memDCs[box_monitor_count] = { nullptr };
+HBITMAP box_frameDCs[box_monitor_count] = { nullptr };
+#endif
 
 int key_windows(const int keycode) {
 	switch(keycode) {
@@ -531,31 +538,30 @@ int main(int argc, char* argv[]) { // call WinMain from dummy main function in o
 #endif // GRAPHICS_CONSOLE
 
 #ifdef BOX_VIEWPORT_6
-// Helper function to re-aim the single camera at each of the 6 box sides
-// Helper function to point the camera at the 6 sides of the domain box
-void set_camera_transform_for_view(Camera& cam, int view_index) {
+// Layouts, selected in defines.hpp:
+//   BOX_VIEWPORT_6_MULTI_MONITOR:  one view per physical monitor
+//   BOX_VIEWPORT_6_SINGLE_MONITOR: 6 windows tiled 3x2 on one monitor
+//   BOX_VIEWPORT_6_CUBE_NET:       unfolded cube (cross shape) in one window
+ 
+// ----------------------------- shared helpers --------------------------------
+// Used by MULTI_MONITOR and SINGLE_MONITOR only (CUBE_NET has its own, see below).
+// Zoom for these two layouts: change 40.0f (all views except Bottom) or pass a different
+// bottom_zoom (view 0). Higher number = closer / bigger, lower = farther / smaller.
+void set_camera_transform_for_view(Camera& cam, int view_index, float bottom_zoom = 85.0f) {
     switch (view_index) {
-        case 0: cam.rx = 0.5 * pi; cam.ry = 0.5 * pi; break; // Side 1 (-Z / Bottom)
-        case 1: cam.rx = 0.0;      cam.ry = pi;       break; // Side 2 (+X / Right)
-        case 2: cam.rx = 0.5 * pi; cam.ry = pi;       break; // Side 3 (+Y / Front)
-        case 3: cam.rx = 0.5 * pi; cam.ry = 1.5 * pi; break; // Side 4 (+Z / Top)
-        case 4: cam.rx = pi;       cam.ry = pi;       break; // Side 5 (-X / Left)
-        case 5: cam.rx = 1.5 * pi; cam.ry = pi;       break; // Side 6 (-Y / Back)
+        case 0: cam.rx = 0.5 * pi; cam.ry = 0.5 * pi; break;
+        case 1: cam.rx = 0.0;      cam.ry = pi;       break;
+        case 2: cam.rx = 0.5 * pi; cam.ry = pi;       break;
+        case 3: cam.rx = 0.5 * pi; cam.ry = 1.5 * pi; break;
+        case 4: cam.rx = pi;       cam.ry = pi;       break;
+        case 5: cam.rx = 1.5 * pi; cam.ry = pi;       break;
     }
-
-	cam.lockmouse = true;
-	if (view_index == 0) {
-		cam.set_zoom(64.0f);
-	}
-	else {
-		cam.set_zoom(85.0f);
-		
-	}
-	cam.fov = 10.0f;
+    cam.lockmouse = true;
+    cam.set_zoom(view_index == 0 ? bottom_zoom : 40.0f); // <-- zoom for views 1-5 is this 40.0f
+    cam.fov = 10.0f;
     cam.update_matrix();
 }
-
-// Array of labels matching the 6 box sides
+ 
 const string view_labels[6] = {
     "1: Bottom (-Z)",
     "2: Right (+X)",
@@ -564,47 +570,131 @@ const string view_labels[6] = {
     "5: Left (-X)",
     "6: Back (-Y)"
 };
-
+ 
+struct MonitorLookup {
+    int requested_index = 0;
+    int current_index = 0;
+    RECT rect = { 0, 0, 0, 0 };
+    bool found = false;
+};
+ 
+BOOL CALLBACK find_monitor(const HMONITOR monitor, HDC, LPRECT, LPARAM data) {
+    MonitorLookup* lookup = (MonitorLookup*)data;
+    if (lookup->current_index == lookup->requested_index) {
+        MONITORINFO info = { sizeof(info) };
+        if (GetMonitorInfo(monitor, &info)) {
+            lookup->rect = info.rcMonitor;
+            lookup->found = true;
+        }
+        return FALSE;
+    }
+    lookup->current_index++;
+    return TRUE;
+}
+ 
+bool get_monitor_rect(const int monitor_index, RECT& rect) {
+    MonitorLookup lookup;
+    lookup.requested_index = monitor_index;
+    EnumDisplayMonitors(nullptr, nullptr, find_monitor, (LPARAM)&lookup);
+    if (lookup.found) rect = lookup.rect;
+    return lookup.found;
+}
+ 
+#if defined(BOX_VIEWPORT_6_MULTI_MONITOR)
+// ------------------------------ multi-monitor --------------------------------
+bool render_side_to_monitor(const uint view_index, const int monitor_index, const BITMAPINFO& bitmap_info, const double frametime, HDC target_memDC) {
+    if (view_index >= 6u || !camera.allow_rendering) return false;
+ 
+    set_camera_transform_for_view(camera, (int)view_index);
+    camera.update_state(fmax(1.0 / (double)camera.fps_limit, frametime));
+    main_graphics();
+    main_label(frametime);
+    draw_text(10, 10, view_labels[view_index], 0xFFFFFF);
+ 
+    SetDIBitsToDevice(
+        target_memDC,
+        0, 0,
+        camera.width, camera.height,
+        0, 0,
+        0, camera.height,
+        camera.bitmap,
+        &bitmap_info,
+        DIB_RGB_COLORS
+    );
+    return true;
+}
+ 
 INT WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ PSTR, _In_ INT) {
     WNDCLASS wndClass = { 0, WndProc, 0, 0, hInstance, LoadIcon(0, IDI_APPLICATION), LoadCursor(0, IDC_ARROW), (HBRUSH)GetStockObject(BLACK_BRUSH), 0, TEXT("WindowClass") };
     RegisterClass(&wndClass);
-
-    MONITORINFO mi = { sizeof(mi) };
-    if (!GetMonitorInfo(MonitorFromWindow(0, MONITOR_DEFAULTTONEAREST), &mi)) return 1;
-
+ 
+    RECT output_rects[box_monitor_count];
+    uint output_widths[box_monitor_count], output_heights[box_monitor_count];
+    uint tile_width = 0u, tile_height = 0u;
+    const uint monitor_for_display[box_monitor_count] = { 0u, 1u, 2u }; // physical monitor indices
+    const uint view_for_display[box_monitor_count] = { 0u, 5u, 4u };    // box views shown on each display
+    for (uint i = 0u; i < box_monitor_count; i++) {
+        if (!get_monitor_rect((int)monitor_for_display[i], output_rects[i])) return 1;
+        output_widths[i] = (uint)(output_rects[i].right - output_rects[i].left);
+        output_heights[i] = (uint)(output_rects[i].bottom - output_rects[i].top);
+        if (i == 0u) {
+            tile_width = output_widths[i];
+            tile_height = output_heights[i];
+        } else {
+            tile_width = min(tile_width, output_widths[i]);
+            tile_height = min(tile_height, output_heights[i]);
+        }
+    }
     DEVMODE lpDevMode = { 0 };
-    const uint width  = (uint)(mi.rcMonitor.right - mi.rcMonitor.left);
-    const uint height = (uint)(mi.rcMonitor.bottom - mi.rcMonitor.top);
     const uint fps_limit = (uint)EnumDisplaySettings(0, ENUM_CURRENT_SETTINGS, &lpDevMode) != 0 ? (uint)lpDevMode.dmDisplayFrequency : 60u;
-
+ 
     ShowCursor(false);
-    SetCursorPos(width / 2, height / 2);
-
-    window = CreateWindow("WindowClass", WINDOW_NAME, WS_POPUP | WS_VISIBLE, mi.rcMonitor.left, mi.rcMonitor.top, width, height, 0, 0, hInstance, 0);
-    displayDC = GetDC(window);
-    memDC = CreateCompatibleDC(displayDC);
-    frameDC = CreateCompatibleBitmap(displayDC, width, height);
-    SelectObject(memDC, frameDC);
-
-    const uint vp_width  = width / 3;
-    const uint vp_height = height / 2;
-
+    for (uint i = 0u; i < box_monitor_count; i++) {
+        box_windows[i] = CreateWindowEx(
+            WS_EX_TOPMOST,
+            "WindowClass",
+            WINDOW_NAME,
+            WS_POPUP,
+            output_rects[i].left,
+            output_rects[i].top,
+            output_widths[i],
+            output_heights[i],
+            0,
+            0,
+            hInstance,
+            0
+        );
+        if (!box_windows[i]) return 1;
+        SetWindowPos(box_windows[i], HWND_TOPMOST, output_rects[i].left, output_rects[i].top, output_widths[i], output_heights[i], SWP_SHOWWINDOW);
+        ShowWindow(box_windows[i], SW_SHOW);
+        UpdateWindow(box_windows[i]);
+        box_displayDCs[i] = GetDC(box_windows[i]);
+        box_memDCs[i] = CreateCompatibleDC(box_displayDCs[i]);
+        box_frameDCs[i] = CreateCompatibleBitmap(box_displayDCs[i], tile_width, tile_height);
+        if (!box_displayDCs[i] || !box_memDCs[i] || !box_frameDCs[i]) return 1;
+        SelectObject(box_memDCs[i], box_frameDCs[i]);
+    }
+    window = box_windows[0];
+    displayDC = box_displayDCs[0];
+    memDC = box_memDCs[0];
+    frameDC = box_frameDCs[0];
+    SetCursorPos(output_rects[0].left + (int)tile_width / 2, output_rects[0].top + (int)tile_height / 2);
+ 
     BITMAPINFO bmi = { 0 };
     bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bmi.bmiHeader.biWidth = vp_width;
-    bmi.bmiHeader.biHeight = -(int)vp_height;
+    bmi.bmiHeader.biWidth = tile_width;
+    bmi.bmiHeader.biHeight = -(int)tile_height;
     bmi.bmiHeader.biPlanes = 1;
     bmi.bmiHeader.biBitCount = 32;
     bmi.bmiHeader.biCompression = BI_RGB;
-
-    camera = Camera(vp_width, vp_height, fps_limit);
-	// step the sim
+ 
+    camera = Camera(tile_width, tile_height, fps_limit);
     thread compute_thread(main_physics);
-
+ 
     Clock clock;
     double frametime = 1.0;
     MSG msg = { 0 };
-
+ 
     while (msg.message != WM_QUIT) {
         while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) break;
@@ -612,58 +702,977 @@ INT WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ PSTR, _In_
             DispatchMessage(&msg);
         }
         if (!running) break;
-
+ 
         camera.rendring_frame.lock();
-
-        for (int i = 0; i < 6; i++) {
-            int vp_x = (i % 3) * vp_width;
-            int vp_y = (i / 3) * vp_height;
-
-            // 1. Orient camera
-            set_camera_transform_for_view(camera, i);
-            camera.update_state(fmax(1.0 / (double)camera.fps_limit, frametime));
-
-            // 2. Render graphics scene into camera.bitmap
-            main_graphics();
-
-            // 3. Draw text label into camera.bitmap at offset (10, 10) in white (0xFFFFFF)
-            draw_text(10, 10, view_labels[i], 0xFFFFFF);
-
-            // 4. Blit camera.bitmap to memDC tile offset
-            SetDIBitsToDevice(
-                memDC,
-                vp_x, vp_y,
-                vp_width, vp_height,
-                0, 0,
-                0, vp_height,
-                camera.bitmap,
-                &bmi,
-                DIB_RGB_COLORS
-            );
+ 
+        for (uint i = 0u; i < box_monitor_count; i++) {
+            render_side_to_monitor(view_for_display[i], (int)monitor_for_display[i], bmi, frametime, box_memDCs[i]);
+            SetStretchBltMode(box_displayDCs[i], COLORONCOLOR);
+            StretchBlt(box_displayDCs[i], 0, 0, output_widths[i], output_heights[i], box_memDCs[i], 0, 0, tile_width, tile_height, SRCCOPY);
         }
-
-        // 5. Present frame
-        BitBlt(displayDC, 0, 0, width, height, memDC, 0, 0, SRCCOPY);
-
+ 
         camera.rendring_frame.unlock();
-
+ 
         frametime = clock.stop();
         sleep(1.0 / (double)camera.fps_limit - frametime);
         clock.start();
     }
-
-    SelectObject(memDC, NULL);
-    DeleteObject(frameDC);
-    DeleteDC(memDC);
-    ReleaseDC(window, displayDC);
-
+ 
+    for (uint i = 0u; i < box_monitor_count; i++) {
+        SelectObject(box_memDCs[i], NULL);
+        DeleteObject(box_frameDCs[i]);
+        DeleteDC(box_memDCs[i]);
+        ReleaseDC(box_windows[i], box_displayDCs[i]);
+    }
+ 
     if (compute_thread.joinable()) {
         compute_thread.join();
     }
+ 
+    return 0;
+}
+ 
+#elif defined(BOX_VIEWPORT_6_SINGLE_MONITOR)
+// ----------------------------- single monitor (3x2) --------------------------
+INT WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ PSTR, _In_ INT) {
+    WNDCLASS wndClass = { 0, WndProc, 0, 0, hInstance, LoadIcon(0, IDI_APPLICATION), LoadCursor(0, IDC_ARROW), (HBRUSH)GetStockObject(BLACK_BRUSH), 0, TEXT("WindowClass") };
+    RegisterClass(&wndClass);
+ 
+    const uint monitor_for_display = 1u; // physical monitor index
+ 
+    RECT monitor_rect;
+    if (!get_monitor_rect((int)monitor_for_display, monitor_rect)) return 1;
+ 
+    DEVMODE lpDevMode = { 0 };
+    const uint width = (uint)(monitor_rect.right - monitor_rect.left);
+    const uint height = (uint)(monitor_rect.bottom - monitor_rect.top);
+    const uint fps_limit = EnumDisplaySettings(0, ENUM_CURRENT_SETTINGS, &lpDevMode) != 0 ? (uint)lpDevMode.dmDisplayFrequency : 60u;
+ 
+    // Window 1 | Window 2 | Window 3
+    // Window 4 | Window 5 | Window 6
+    const uint window_width = width / 3;
+    const uint window_height = height / 2;
+ 
+    HWND windows[6] = {};
+    HDC displayDCs[6] = {};
+    HDC memDCs[6] = {};
+    HBITMAP frameDCs[6] = {};
+ 
+    for (int i = 0; i < 6; i++) {
+        const int column = i % 3;
+        const int row = i / 3;
+        const int window_x = monitor_rect.left + column * (int)window_width;
+        const int window_y = monitor_rect.top + row * (int)window_height;
+ 
+        windows[i] = CreateWindow(
+            "WindowClass",
+            view_labels[i].c_str(),
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            window_x,
+            window_y,
+            window_width,
+            window_height,
+            0,
+            0,
+            hInstance,
+            0
+        );
+        if (!windows[i]) return 1;
+ 
+        displayDCs[i] = GetDC(windows[i]);
+        memDCs[i] = CreateCompatibleDC(displayDCs[i]);
+        frameDCs[i] = CreateCompatibleBitmap(displayDCs[i], window_width, window_height);
+        SelectObject(memDCs[i], frameDCs[i]);
+    }
+ 
+    BITMAPINFO bmi = { 0 };
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = window_width;
+    bmi.bmiHeader.biHeight = -(int)window_height;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+ 
+    camera = Camera(window_width, window_height, fps_limit);
+    thread compute_thread(main_physics);
+ 
+    Clock clock;
+    double frametime = 1.0;
+    MSG msg = { 0 };
+ 
+    while (msg.message != WM_QUIT) {
+        while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) break;
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        if (!running) break;
+ 
+        camera.rendring_frame.lock();
+ 
+        if (camera.allow_rendering) {
+            for (int i = 0; i < 6; i++) {
+                set_camera_transform_for_view(camera, i, 64.0f); // 64.0f = zoom of view 0 (Bottom) in this layout
+                camera.update_state(fmax(1.0 / (double)camera.fps_limit, frametime));
+                main_graphics();
+                draw_text(10, 10, view_labels[i], 0xFFFFFF);
+ 
+                SetDIBitsToDevice(
+                    memDCs[i],
+                    0, 0,
+                    window_width, window_height,
+                    0, 0,
+                    0, window_height,
+                    camera.bitmap,
+                    &bmi,
+                    DIB_RGB_COLORS
+                );
+ 
+                BitBlt(displayDCs[i], 0, 0, window_width, window_height, memDCs[i], 0, 0, SRCCOPY);
+            }
+        }
+ 
+        camera.rendring_frame.unlock();
+ 
+        frametime = clock.stop();
+        sleep(1.0 / (double)camera.fps_limit - frametime);
+        clock.start();
+    }
+ 
+    for (int i = 0; i < 6; i++) {
+        SelectObject(memDCs[i], NULL);
+        DeleteObject(frameDCs[i]);
+        DeleteDC(memDCs[i]);
+        ReleaseDC(windows[i], displayDCs[i]);
+        DestroyWindow(windows[i]);
+    }
+ 
+    if (compute_thread.joinable()) {
+        compute_thread.join();
+    }
+ 
+    return 0;
+}
+ 
+#elif defined(BOX_VIEWPORT_6_CUBE_NET)
+// ------------------------------ cube net --------------------------------------
+//
+//              [ Top +Z ]                  col 1, row 0
+//   [ Left +X ][ Front +Y ][ Right -X ]    cols 0,1,2  row 1
+//              [ Bottom -Z ]               col 1, row 2
+//              [ Back -Y ]                 col 1, row 3
+//
+// The cube net remains one connected cross-shaped display.
+//
+// IMPORTANT:
+// The window now uses the entire Windows virtual desktop.
+// This means the cube net can extend across multiple physical monitors.
+//
+// The window is a normal draggable Windows window.
+// The mouse cursor remains visible.
+//
+// Seen from OUTSIDE the cube with Front (+Y) as the anchor, so every shared
+// edge is a real cube edge and the net folds into an accurate cube.
+//
+// All settings are in this block. Index order of every [6] array:
+//   0 = Bottom(-Z)
+//   1 = +X
+//   2 = Front(+Y)
+//   3 = Top(+Z)
+//   4 = -X
+//   5 = Back(-Y)
+
+
+// ============================================================
+// WHICH MONITOR / VIRTUAL DESKTOP
+// ============================================================
+//
+// This is kept for compatibility with the previous code.
+//
+// -1 = primary monitor
+//  0, 1, 2... = monitor by index
+//
+// The cube-net layout itself now uses the entire virtual desktop,
+// so this value is no longer used to limit the cube to one monitor.
+
+const int cube_net_monitor = -1;
+
+
+// ============================================================
+// ZOOM PER FACE
+// ============================================================
+//
+// Higher number = closer / bigger
+// Lower number = farther / smaller
+//
+//                                  Bottom  +X     Front  Top    -X     Back
+
+const float cube_net_zoom[6] = {
+    40.0f,
+    40.0f,
+    40.0f,
+    40.0f,
+    40.0f,
+    40.0f
+};
+
+
+// ============================================================
+// FIELD OF VIEW
+// ============================================================
+//
+// Low values make the cube faces look flatter and make the
+// shared edges line up better.
+//
+// 10 degrees is what you were using before.
+
+const float cube_net_fov = 10.0f;
+
+
+// ============================================================
+// CAMERA ANGLES PER FACE
+// ============================================================
+//
+// These put the camera exactly on the labelled face:
+//
+//   +Y face: rx = pi       ry = pi
+//   -Y face: rx = 0        ry = pi
+//
+//   +X face: rx = .5*pi    ry = pi
+//   -X face: rx = 1.5*pi   ry = pi
+//
+//   +Z face: ry = .5*pi
+//   -Z face: ry = 1.5*pi
+//
+// For +Z / -Z, rx controls which direction is "up".
+//
+//                                  Bottom     +X       Front   Top      -X        Back
+
+const double cube_net_rx[6] = {
+    pi,
+    0.5 * pi,
+    pi,
+    pi,
+    1.5 * pi,
+    0.0
+};
+
+const double cube_net_ry[6] = {
+    1.5 * pi,
+    pi,
+    pi,
+    0.5 * pi,
+    pi,
+    pi
+};
+
+
+// ============================================================
+// CROSS-SHAPED CUBE NET POSITION
+// ============================================================
+//
+// This is the part that keeps the original cross.
+//
+//              [ Top ]
+//
+// [ Left ][ Front ][ Right ]
+//
+//              [ Bottom ]
+//
+//              [ Back ]
+//
+// 3 columns x 4 rows.
+//
+//                                  Bottom  +X  Front  Top  -X  Back
+
+const int cube_net_col[6] = {
+    1,
+    0,
+    1,
+    1,
+    2,
+    1
+};
+
+const int cube_net_row[6] = {
+    2,
+    1,
+    1,
+    0,
+    1,
+    3
+};
+
+
+// ============================================================
+// EXTRA ROTATION PER FACE
+// ============================================================
+//
+// 0 = no rotation
+// 1 = 90 degrees clockwise
+// 2 = 180 degrees
+// 3 = 270 degrees clockwise
+//
+// Back needs 2 because of the way the camera is oriented.
+//
+//                                  Bottom  +X  Front  Top  -X  Back
+
+const uint cube_net_rotation[6] = {
+    0,
+    0,
+    0,
+    0,
+    0,
+    2
+};
+
+
+// ============================================================
+// BORDER
+// ============================================================
+
+const bool cube_net_border = true;
+
+const int cube_net_border_color = 0x808080;
+
+
+// ============================================================
+// CUBE NET SCALE
+// ============================================================
+//
+// 1.0 = as large as possible
+// 0.8 = 80%
+// 0.5 = 50%
+//
+// Because the virtual desktop is now used, 1.0 will attempt
+// to make the cross as large as possible across all monitors.
+
+const float cube_net_scale = 1.0f;
+
+
+// ============================================================
+// CAMERA SETUP
+// ============================================================
+
+void set_camera_transform_cube_net(
+    Camera& cam,
+    const int view_index
+) {
+    cam.rx = cube_net_rx[view_index];
+    cam.ry = cube_net_ry[view_index];
+
+    // Keep the camera from responding to the mouse.
+    // This is important because the mouse is now used for
+    // dragging the Windows window.
+    cam.lockmouse = true;
+
+    cam.set_zoom(
+        cube_net_zoom[view_index]
+    );
+
+    cam.fov = cube_net_fov;
+
+    cam.update_matrix();
+}
+
+
+// ============================================================
+// OLD MONITOR FUNCTION
+// ============================================================
+//
+// Kept here in case other code still references it.
+
+bool get_cube_net_monitor_rect(RECT& rect) {
+
+    if (cube_net_monitor >= 0)
+        return get_monitor_rect(
+            cube_net_monitor,
+            rect
+        );
+
+    const HMONITOR monitor =
+        MonitorFromPoint(
+            POINT{ 0, 0 },
+            MONITOR_DEFAULTTOPRIMARY
+        );
+
+    MONITORINFO info = {
+        sizeof(info)
+    };
+
+    if (!GetMonitorInfo(
+        monitor,
+        &info
+    ))
+        return false;
+
+    rect = info.rcMonitor;
+
+    return true;
+}
+
+
+// ============================================================
+// ROTATE IMAGE
+// ============================================================
+
+void rotate_square_clockwise(
+    const uint* src,
+    uint* dst,
+    const uint n,
+    const uint quarter_turns
+) {
+
+    for (uint y = 0u; y < n; y++) {
+
+        for (uint x = 0u; x < n; x++) {
+
+            const uint p =
+                src[y * n + x];
+
+            switch (quarter_turns & 3u) {
+
+                case 0u:
+
+                    dst[
+                        y * n + x
+                    ] = p;
+
+                    break;
+
+
+                case 1u:
+
+                    dst[
+                        x * n +
+                        (n - 1u - y)
+                    ] = p;
+
+                    break;
+
+
+                case 2u:
+
+                    dst[
+                        (n - 1u - y) * n +
+                        (n - 1u - x)
+                    ] = p;
+
+                    break;
+
+
+                case 3u:
+
+                    dst[
+                        (n - 1u - x) * n +
+                        y
+                    ] = p;
+
+                    break;
+            }
+        }
+    }
+}
+
+
+void draw_tile_border(
+    int* bitmap,
+    const uint n,
+    const int color
+) {
+
+    for (uint i = 0u; i < n; i++) {
+
+        // Top
+        bitmap[i] = color;
+
+        // Bottom
+        bitmap[
+            (n - 1u) * n + i
+        ] = color;
+
+        // Left
+        bitmap[
+            i * n
+        ] = color;
+
+        // Right
+        bitmap[
+            i * n + n - 1u
+        ] = color;
+    }
+}
+
+
+INT WINAPI WinMain(
+    _In_ HINSTANCE hInstance,
+    _In_opt_ HINSTANCE,
+    _In_ PSTR,
+    _In_ INT
+) {
+
+    WNDCLASS wndClass = {
+        0,
+        WndProc,
+        0,
+        0,
+        hInstance,
+        LoadIcon(
+            0,
+            IDI_APPLICATION
+        ),
+        LoadCursor(
+            0,
+            IDC_ARROW
+        ),
+        (HBRUSH)GetStockObject(
+            BLACK_BRUSH
+        ),
+        0,
+        TEXT("WindowClass")
+    };
+
+    RegisterClass(&wndClass);
+
+    const int virtual_left =
+        GetSystemMetrics(
+            SM_XVIRTUALSCREEN
+        );
+
+    const int virtual_top =
+        GetSystemMetrics(
+            SM_YVIRTUALSCREEN
+        );
+
+    const uint virtual_width =
+        (uint)GetSystemMetrics(
+            SM_CXVIRTUALSCREEN
+        );
+
+    const uint virtual_height =
+        (uint)GetSystemMetrics(
+            SM_CYVIRTUALSCREEN
+        );
+
+
+    if (
+        virtual_width == 0 ||
+        virtual_height == 0
+    ) {
+        return 1;
+    }
+
+    DEVMODE lpDevMode = {
+        0
+    };
+
+    const uint fps_limit =
+        EnumDisplaySettings(
+            0,
+            ENUM_CURRENT_SETTINGS,
+            &lpDevMode
+        ) != 0
+        ?
+        (uint)lpDevMode.dmDisplayFrequency
+        :
+        60u;
+
+
+    const uint max_tile =
+        min(
+            virtual_width / 3u,
+            virtual_height / 4u
+        );
+
+    const uint tile =
+        (
+            (uint)(
+                (float)max_tile *
+                cube_net_scale
+            )
+            / 8u
+        ) * 8u;
+
+
+    if (tile == 0)
+        return 1;
+
+
+    const uint net_width =
+        3u * tile;
+
+    const uint net_height =
+        4u * tile;
+
+    const int net_offset_x =
+        (
+            (int)virtual_width -
+            (int)net_width
+        ) / 2;
+
+    const int net_offset_y =
+        (
+            (int)virtual_height -
+            (int)net_height
+        ) / 2;
+
+
+    ShowCursor(TRUE);
+    window = CreateWindowEx(
+        0,
+        "WindowClass",
+        "FluidX3D Cube Net",
+        WS_OVERLAPPEDWINDOW,
+
+        virtual_left,
+        virtual_top,
+
+        virtual_width,
+        virtual_height,
+
+        0,
+        0,
+        hInstance,
+        0
+    );
+
+
+    if (!window)
+        return 1;
+
+    ShowWindow(
+        window,
+        SW_SHOW
+    );
+
+    UpdateWindow(
+        window
+    );
+
+    RECT client_rect;
+
+    GetClientRect(
+        window,
+        &client_rect
+    );
+
+
+    const uint client_width =
+        (uint)(
+            client_rect.right -
+            client_rect.left
+        );
+
+    const uint client_height =
+        (uint)(
+            client_rect.bottom -
+            client_rect.top
+        );
+
+
+    displayDC =
+        GetDC(window);
+
+    memDC =
+        CreateCompatibleDC(
+            displayDC
+        );
+
+
+    frameDC =
+        CreateCompatibleBitmap(
+            displayDC,
+            net_width,
+            net_height
+        );
+
+
+    if (
+        !displayDC ||
+        !memDC ||
+        !frameDC
+    ) {
+        return 1;
+    }
+
+
+    SelectObject(
+        memDC,
+        frameDC
+    );
+
+    PatBlt(
+        memDC,
+        0,
+        0,
+        net_width,
+        net_height,
+        BLACKNESS
+    );
+
+    const int draw_offset_x =
+        (
+            (int)client_width -
+            (int)net_width
+        ) / 2;
+
+    const int draw_offset_y =
+        (
+            (int)client_height -
+            (int)net_height
+        ) / 2;
+
+    BITMAPINFO bmi = {
+        0
+    };
+
+    bmi.bmiHeader.biSize =
+        sizeof(BITMAPINFOHEADER);
+
+    bmi.bmiHeader.biWidth =
+        tile;
+
+    bmi.bmiHeader.biHeight =
+        -(int)tile;
+
+    bmi.bmiHeader.biPlanes =
+        1;
+
+    bmi.bmiHeader.biBitCount =
+        32;
+
+    bmi.bmiHeader.biCompression =
+        BI_RGB;
+
+    camera =
+        Camera(
+            tile,
+            tile,
+            fps_limit
+        );
+
+    vector<uint> rotated(
+        tile * tile
+    );
+
+    thread compute_thread(
+        main_physics
+    );
+
+    Clock clock;
+
+    double frametime = 1.0;
+
+    MSG msg = {
+        0
+    };
+
+    while (
+        msg.message != WM_QUIT
+    ) {
+
+        while (
+            PeekMessage(
+                &msg,
+                0,
+                0,
+                0,
+                PM_REMOVE
+            )
+        ) {
+
+            if (
+                msg.message ==
+                WM_QUIT
+            ) {
+                break;
+            }
+
+            TranslateMessage(
+                &msg
+            );
+
+            DispatchMessage(
+                &msg
+            );
+        }
+
+
+        if (!running)
+            break;
+        camera.rendring_frame.lock();
+        if (
+            camera.allow_rendering
+        ) {
+
+            for (
+                int view = 0;
+                view < 6;
+                view++
+            ) {
+
+                set_camera_transform_cube_net(
+                    camera,
+                    view
+                );
+
+                camera.update_state(
+                    fmax(
+                        1.0 /
+                        (double)camera.fps_limit,
+                        frametime
+                    )
+                );
+
+                main_graphics();
+                if (
+                    (cube_net_rotation[view] & 3u)
+                    != 0u
+                ) {
+
+                    rotate_square_clockwise(
+                        (const uint*)
+                            camera.bitmap,
+
+                        rotated.data(),
+
+                        tile,
+
+                        cube_net_rotation[view]
+                    );
+
+
+                    memcpy(
+                        (void*)
+                            camera.bitmap,
+
+                        rotated.data(),
+
+                        (size_t)tile *
+                        (size_t)tile *
+                        sizeof(uint)
+                    );
+                }
+
+
+                if (
+                    cube_net_border
+                ) {
+
+                    draw_tile_border(
+                        camera.bitmap,
+                        tile,
+                        cube_net_border_color
+                    );
+                }
+
+                draw_text(
+                    10,
+                    10,
+                    view_labels[view],
+                    0xFFFFFF
+                );
+
+                SetDIBitsToDevice(
+
+                    memDC,
+
+                    (int)(
+                        cube_net_col[view] *
+                        tile
+                    ),
+
+                    (int)(
+                        cube_net_row[view] *
+                        tile
+                    ),
+
+                    tile,
+                    tile,
+
+                    0,
+                    0,
+
+                    0,
+                    tile,
+
+                    camera.bitmap,
+
+                    &bmi,
+
+                    DIB_RGB_COLORS
+                );
+            }
+
+            BitBlt(
+                displayDC,
+
+                draw_offset_x,
+                draw_offset_y,
+
+                net_width,
+                net_height,
+
+                memDC,
+
+                0,
+                0,
+
+                SRCCOPY
+            );
+        }
+
+        camera.rendring_frame.unlock();
+
+        frametime =
+            clock.stop();
+
+
+        sleep(
+            1.0 /
+            (double)camera.fps_limit
+            -
+            frametime
+        );
+
+
+        clock.start();
+    }
+    SelectObject(
+        memDC,
+        NULL
+    );
+
+
+    DeleteObject(
+        frameDC
+    );
+
+
+    DeleteDC(
+        memDC
+    );
+
+    ReleaseDC(
+        window,
+        displayDC
+    );
+    DestroyWindow(
+        window
+    );
+
+    if (
+        compute_thread.joinable()
+    ) {
+
+        compute_thread.join();
+    }
+
 
     return 0;
 }
 
+#endif // BOX_VIEWPORT_6_MULTI_MONITOR / BOX_VIEWPORT_6_SINGLE_MONITOR / BOX_VIEWPORT_6_CUBE_NET
 #else
 
 INT WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ PSTR, _In_ INT) {
